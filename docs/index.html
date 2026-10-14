@@ -93,15 +93,17 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
   padding-block:14px 120px}
 .wrap{width:100%;max-width:520px;display:flex;flex-direction:column;gap:14px}
 
-header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding-top:6px}
+header{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"eye btns" "title btns";align-items:end;column-gap:12px;padding-top:6px}
+header .eyebrow{grid-area:eye;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header h1{grid-area:title}
+header .hbtns{grid-area:btns}
+.dockcap{display:none}
 .eyebrow{font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-2)}
 h1{margin:2px 0 0;font-size:clamp(30px,8.4vw,40px);line-height:1.02;font-weight:800;letter-spacing:-.035em;text-wrap:balance}
-h1 .peek{position:relative;display:inline-block;width:1.05em;height:1em;vertical-align:-.12em;margin-left:.05em}
-h1 .peektree{position:absolute;inset:0;z-index:1;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;font-size:.92em;line-height:1.1;text-align:center;letter-spacing:0}
-h1 .peekfox{position:absolute;z-index:0;width:.7em;height:.7em;left:.18em;top:-.04em;transform-origin:20% 90%;animation:peek 5.5s ease-in-out .6s infinite}
-h1 .peekfox .foxsvg{width:100%;height:100%}
-h1 .peekfox .rise,h1 .peekfox .tail{animation:none}
-@keyframes peek{0%,100%{transform:translate(0,.05em) rotate(0)}14%,50%{transform:translate(.5em,-.06em) rotate(14deg)}24%,40%{transform:translate(.54em,-.09em) rotate(20deg)}62%{transform:translate(0,.05em) rotate(0)}}
+h1 .peek{display:inline-block;width:1.3em;height:1.15em;vertical-align:-.2em;margin-left:0}
+h1 .peek svg{width:100%;height:100%;overflow:visible}
+h1 .peek .pk{animation:peek 5.5s ease-in-out .8s infinite}
+@keyframes peek{0%,100%{transform:translate(-14px,6px) rotate(-6deg)}14%,50%{transform:translate(18px,0) rotate(2deg)}24%,40%{transform:translate(21px,-2px) rotate(7deg)}62%{transform:translate(-14px,6px) rotate(-6deg)}}
 .hbtns{display:flex;gap:8px;flex:none}
 .circle{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;transition:transform .25s cubic-bezier(.2,.9,.3,1.4)}
 .circle:active{transform:scale(.9)}
@@ -439,6 +441,16 @@ h1 .peekfox .rise,h1 .peekfox .tail{animation:none}
 .sharerow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .sharerow button{height:46px;border-radius:999px;font-weight:600;font-size:15px;background:var(--hair);display:flex;align-items:center;justify-content:center;gap:8px}
 .sharerow svg{width:18px;height:18px}
+/* phones: title on its own line, game mode under the toolbar */
+@media (max-width:600px){
+  header{grid-template-areas:"eye btns" "title title";align-items:center;row-gap:8px}
+  header .eyebrow{font-size:12px;letter-spacing:.04em}
+  header h1{white-space:nowrap;font-size:clamp(28px,9.6vw,40px)}
+  .modeline{display:none}
+  .dock{bottom:calc(32px + env(safe-area-inset-bottom,0px))}
+  .dockcap{display:block;position:fixed;left:0;right:0;z-index:5;bottom:calc(8px + env(safe-area-inset-bottom,0px));text-align:center;font-size:12.5px;font-weight:600;color:var(--fg-2);pointer-events:none}
+  .app{padding-block:14px 150px}
+}
 </style>
 
 <div id="splash"><svg aria-hidden="true" viewBox="0 0 512 512"><clipPath id="sp-r"><rect width="512" height="512" rx="114"/></clipPath><g clip-path="url(#sp-r)"><defs><linearGradient id="sp-bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2a8a5e"/><stop offset=".55" stop-color="#145a3e"/><stop offset="1" stop-color="#0c3a29"/></linearGradient>
@@ -464,10 +476,8 @@ h1 .peekfox .rise,h1 .peekfox .tail{animation:none}
 <main class="app">
   <div class="wrap">
     <header>
-      <div>
         <div class="eyebrow">Логическая игра · 1985 — 2026</div>
-        <h1>Охота на&nbsp;лис <span class="peek" aria-hidden="true"><span class="peekfox" data-fox></span><span class="peektree">🌳</span></span></h1>
-      </div>
+        <h1>Охота на&nbsp;лис <span class="peek" id="peek" aria-hidden="true"></span></h1>
       <div class="hbtns">
         <button class="circle glass" id="btnRules" aria-label="Правила">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.2"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.4"/><circle cx="12" cy="16.9" r=".6" fill="currentColor"/></svg>
@@ -511,6 +521,7 @@ h1 .peekfox .rise,h1 .peekfox .tail{animation:none}
   <button class="toggle" id="btnHints" role="switch" aria-checked="true"><span>Подсказки</span><i class="switch"></i></button>
   <button class="primary" id="btnNew">Новая игра</button>
 </nav>
+<div class="dockcap" id="dockCap"></div>
 
 <div class="scrim" id="scrim"></div>
 
@@ -643,6 +654,12 @@ const POSE_EXTRA = {
 const foxSVG = (pose = 'base') => `<svg class="foxsvg${pose === 'sleep' ? ' sleep' : ''}" viewBox="0 0 64 64"><g class="rise">${FOX_BODY}${POSE_EXTRA[pose] || ''}</g></svg>`;
 const FOX = foxSVG();
 document.querySelectorAll('[data-fox]').forEach(el => { el.innerHTML = FOX; });
+$('peek').innerHTML = `<svg class="foxsvg" viewBox="0 0 100 100"><g class="pk"><g transform="translate(44 14) scale(.62) rotate(12 32 40)">${FOX_BODY.replace(/<g class="tail">.*?<\/g>/, '')}</g></g>
+  <ellipse cx="38" cy="95" rx="30" ry="4" fill="var(--ground)"/><path d="M34 64h8l2.5 31h-13z" fill="var(--trunk)"/>
+  <circle cx="21" cy="52" r="16" fill="var(--leaf-3)"/><circle cx="55" cy="52" r="16" fill="var(--leaf-3)"/><circle cx="38" cy="35" r="27" fill="var(--leaf-1)"/>
+  <circle cx="23" cy="55" r="13" fill="var(--leaf-1)"/><circle cx="53" cy="55" r="13" fill="var(--leaf-1)"/><circle cx="38" cy="60" r="14" fill="var(--leaf-1)"/>
+  <circle cx="31" cy="44" r="6" fill="var(--leaf-2)" opacity=".55"/><circle cx="50" cy="40" r="5.5" fill="var(--leaf-2)" opacity=".55"/><circle cx="41" cy="56" r="5" fill="var(--leaf-2)" opacity=".45"/>
+  <circle cx="27" cy="23" r="10" fill="var(--leaf-2)"/><circle cx="49" cy="20" r="6" fill="var(--leaf-2)" opacity=".8"/><circle cx="24.5" cy="20" r="3" fill="#fff" opacity=".55"/></svg>`;
 function $(id){ return document.getElementById(id); }
 const store = {
   get(k, d){ try { const v = localStorage.getItem('foxhunt.'+k); return v == null ? d : JSON.parse(v); } catch { return d; } },
@@ -774,6 +791,7 @@ function render(animate = true){
     : 'Подсказки выключены: все клетки доступны.';
   const dd = S.daily ? new Date(S.daily + 'T12:00') : null;
   $('lvlChip').textContent = `${LV.icon} ${LV.name} · ${N}×${N}`;
+  $('dockCap').textContent = `${LV.icon} ${LV.name} · ${N}×${N}${S.daily ? ' · Игра дня' : ''}`;
   $('dailyChip').hidden = !S.daily;
   if (dd) $('dailyChip').textContent = 'Игра дня · ' + dd.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
   tick();
@@ -821,6 +839,17 @@ function noise(dur, { vol = .12, freq = 2400, at = 0 } = {}){
   flt.type = 'bandpass'; flt.frequency.value = freq; flt.Q.value = .8; g.gain.value = vol;
   src.buffer = buf; src.connect(flt).connect(g).connect(c.destination); src.start(t);
 }
+// one soft leaf rustle for an opened cell: low-passed, smoothed noise, no hiss
+function leaf(){
+  const c = ac(); if (!c) return;
+  const t = c.currentTime, dur = .32, len = c.sampleRate * dur | 0, buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
+  let b = 0; for (let i = 0; i < len; i++){ b = .9 * b + .1 * (Math.random() * 2 - 1); d[i] = b * 2.4; }
+  const src = c.createBufferSource(); src.buffer = buf;
+  const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(1500, t); lp.frequency.linearRampToValueAtTime(700, t + dur);
+  const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 220;
+  const g = c.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.2, t + .04); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  src.connect(hp).connect(lp).connect(g).connect(c.destination); src.start(t); src.stop(t + dur);
+}
 function forest(n){
   const c = ac(); if (!c) return;
   const dur = Math.min(2.2, .9 + n * .03), vol = Math.min(.32, .12 + n * .006), t = c.currentTime;
@@ -838,8 +867,8 @@ function forest(n){
 function sfx(name, n = 1){
   if (!SET.sound) return;
   try {
-    if (name === 'open'){ noise(.16, { vol: .16, freq: 2600 }); tone(520, .12, { vol: .07, to: 380 }); }
-    if (name === 'fox'){ noise(.18, { vol: .14 }); tone(760, .12, { type: 'triangle', vol: .16, to: 1250 }); tone(980, .14, { type: 'triangle', vol: .14, at: .13, to: 1500 }); }
+    if (name === 'open'){ leaf(); tone(440, .14, { vol: .04, to: 330 }); }
+    if (name === 'fox'){ leaf(); tone(760, .12, { type: 'triangle', vol: .16, to: 1250 }); tone(980, .14, { type: 'triangle', vol: .14, at: .13, to: 1500 }); }
     if (name === 'nope'){ tone(170, .14, { type: 'triangle', vol: .16, to: 120 }); }
     if (name === 'forest'){ forest(n); }
     if (name === 'pause'){ tone(660, .08, { vol: .08 }); }
