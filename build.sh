@@ -40,8 +40,8 @@ if ('serviceWorker' in navigator) addEventListener('load', () => {
     document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
   }).catch(() => {});
   // a new version took over: reload once so the player sees it
-  let reloaded = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded && navigator.serviceWorker.controller){ reloaded = true; location.reload(); } });
+  let reloaded = false; const hadOld = !!navigator.serviceWorker.controller;   // not on the very first visit
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadOld && !reloaded){ reloaded = true; location.reload(); } });
 });
 </script>
 </body>
