@@ -397,6 +397,35 @@ h1 .peekfox .rise,h1 .peekfox .tail{animation:none}
 @keyframes foxout{0%{transform:translate(-150px,30px) rotate(-14deg)}60%{transform:translate(10px,-6px) rotate(4deg)}100%{transform:none}}
 @keyframes fadeup{from{transform:translateY(8px);opacity:0}}
 
+/* victory on the board */
+@property --ang{syntax:'<angle>';inherits:false;initial-value:0deg}
+.boardcard.won::after{content:"";position:absolute;inset:0;border-radius:inherit;padding:3px;pointer-events:none;
+  background:conic-gradient(from var(--ang),#ffd257,#ff7a1a,#ff4d6d,#3ee0a8,#6cb2ff,#ffd257);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);
+  animation:spinring 4s linear infinite}
+@keyframes spinring{to{--ang:360deg}}
+.boardcard.won{box-shadow:inset 0 1px 0 var(--glass-edge),0 0 0 1px rgba(255,210,87,.25),0 18px 50px -10px color-mix(in srgb,var(--fox) 45%,transparent)}
+.board.cheer .cell:not(.fox) > *{animation:cheer .7s cubic-bezier(.3,1.7,.5,1) var(--rd,0s) both}
+@keyframes cheer{0%{transform:none}35%{transform:translateY(-22%) scale(1.18)}70%{transform:translateY(4%) scale(.96)}100%{transform:none}}
+.board.won .cell.fox .foxsvg{animation:dance 1.3s ease-in-out var(--fd,0s) infinite}
+@keyframes dance{0%,100%{transform:translateY(0) rotate(0)}25%{transform:translateY(-12%) rotate(-8deg)}50%{transform:translateY(0) rotate(0)}75%{transform:translateY(-12%) rotate(8deg)}}
+.board.won:not(.cheer) .cell.closed .tree{animation:sway 3s ease-in-out var(--sd,0s) infinite}
+@keyframes sway{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+.winflash{position:absolute;inset:0;z-index:5;display:grid;place-items:center;pointer-events:none;opacity:0}
+.winflash b{font-size:clamp(44px,13vw,72px);font-weight:900;letter-spacing:-.04em;color:#fff;
+  background:linear-gradient(150deg,#ffd257,var(--fox) 50%,var(--fox-2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 6px 18px rgba(0,0,0,.25)) drop-shadow(0 0 2px rgba(255,255,255,.9))}
+.winflash.go{animation:flash 2.2s cubic-bezier(.2,.9,.3,1.2) both}
+@keyframes flash{0%{opacity:0;transform:scale(.4) rotate(-8deg)}18%{opacity:1;transform:scale(1.08) rotate(2deg)}28%{transform:scale(1)}78%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.25)}}
+.woncard{display:flex;align-items:center;gap:12px;padding:12px 12px 12px 16px;border-radius:var(--r-lg)}
+.woncard .wt{flex:1;min-width:0}
+.woncard .wt b{display:block;font-size:17px;font-weight:800;letter-spacing:-.01em}
+.woncard .wt span{font-size:13px;color:var(--fg-2)}
+.woncard .wbtns{display:flex;gap:6px;flex:none}
+.woncard button{height:40px;padding:0 14px;border-radius:999px;font-weight:700;font-size:14px;background:var(--hair)}
+.woncard button.go{background:linear-gradient(150deg,var(--fox),var(--fox-2));color:var(--fox-ink)}
+@media (max-width:400px){.woncard{flex-wrap:wrap}.woncard .wbtns{width:100%}.woncard button{flex:1}}
+
 /* share */
 .sharerow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .sharerow button{height:46px;border-radius:999px;font-weight:600;font-size:15px;background:var(--hair);display:flex;align-items:center;justify-content:center;gap:8px}
@@ -457,6 +486,12 @@ h1 .peekfox .rise,h1 .peekfox .tail{animation:none}
         <button class="big" id="btnResume" aria-label="Продолжить"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.4-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg></button>
         <b>Пауза</b><span>Лес спрятан, время стоит</span>
       </div>
+      <div class="winflash" id="winflash" aria-hidden="true"><b>Победа!</b></div>
+    </section>
+
+    <section class="woncard glass" id="woncard" hidden aria-live="polite">
+      <div class="wt"><b id="wonTitle">🏆 Победа!</b><span id="wonSub"></span></div>
+      <div class="wbtns"><button id="wonShow">Результат</button><button class="go" id="wonNew">Новая игра</button></div>
     </section>
 
     <p class="hint" id="hint"></p>
@@ -697,6 +732,16 @@ function render(animate = true){
   [...$('sFox').children].forEach((d, k) => d.classList.toggle('on', k < f));
   $('sFox').setAttribute('aria-label', `Найдено ${f} из ${FOXES}`);
   $('btnHints').setAttribute('aria-checked', String(S.hints));
+  const won = !!S.end;
+  board.classList.toggle('won', won); $('boardcard').classList.toggle('won', won);
+  $('woncard').hidden = !won; $('hint').hidden = won;
+  if (won){
+    S.foxes.forEach((f, k) => cells[f]?.style.setProperty('--fd', (k * .17) + 's'));
+    cells.forEach((c, i) => { if (!S.opened.includes(i)) c.style.setProperty('--sd', (-(i * 7 % 11) * .27) + 's'); });
+    const m = S.opened.length;
+    $('wonTitle').textContent = `🏆 Победа! ${m} ${plural(m, 'ход', 'хода', 'ходов')} · ${fmt(elapsed())}`;
+    $('wonSub').textContent = `«${tierOf(m).badge}» · ${LV.name}${S.daily ? ' · игра дня' : ''}`;
+  }
   $('hint').textContent = S.end ? 'Все лисы найдены! Начните новую игру или сохраните результат.'
     : S.opened.length === 0 ? `Нажмите на любую клетку леса. Здесь прячутся ${FOXES} ${plural(FOXES, 'лиса', 'лисы', 'лис')}. Цифра покажет, сколько их на той же горизонтали, вертикали и диагоналях.`
     : S.hints ? 'Заштрихованные клетки пустые: туда можно не ходить. Удерживайте цифру, чтобы увидеть её линии.'
@@ -764,6 +809,18 @@ function sfx(name){
 
 function buzz(p){ try { navigator.vibrate && navigator.vibrate(p); } catch {} }
 
+// ---------- victory wave over the board ----------
+function celebrate(from){
+  const r0 = from / N | 0, c0 = from % N;
+  let far = 0;
+  cells.forEach((c, i) => { const d = Math.max(Math.abs((i / N | 0) - r0), Math.abs(i % N - c0)); far = Math.max(far, d); c.style.setProperty('--rd', (d * .07) + 's'); });
+  board.classList.remove('cheer'); void board.offsetWidth; board.classList.add('cheer');
+  setTimeout(() => board.classList.remove('cheer'), far * 70 + 800);
+  const f = $('winflash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
+}
+$('wonShow').onclick = () => win();
+$('wonNew').onclick = () => newGame();
+
 // ---------- moves ----------
 function openCell(i){
   if (S.end || S.pauseAt || S.opened.includes(i)) return;
@@ -777,7 +834,7 @@ function openCell(i){
     if (S.opened.length === 1) unlock('lucky');
     if (prevFox) unlock('double');
   } else { buzz(8); sfx('open'); }
-  if (found().length === FOXES){ S.end = Date.now(); render(); foxSays(i, tierOf(S.opened.length).say); setTimeout(win, 2300); }
+  if (found().length === FOXES){ S.end = Date.now(); render(); celebrate(i); foxSays(i, tierOf(S.opened.length).say); setTimeout(win, 2600); }
   else { render(); if (isFox(i)) foxSays(i, foxLine(i)); }
   persist();
 }
