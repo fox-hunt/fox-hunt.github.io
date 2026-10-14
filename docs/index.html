@@ -421,14 +421,6 @@ h1 .peek .pk{animation:peek 5.5s ease-in-out .8s infinite}
   filter:drop-shadow(0 6px 18px rgba(0,0,0,.25)) drop-shadow(0 0 2px rgba(255,255,255,.9))}
 .winflash.go{animation:flash 2.2s cubic-bezier(.2,.9,.3,1.2) both}
 @keyframes flash{0%{opacity:0;transform:scale(.4) rotate(-8deg)}18%{opacity:1;transform:scale(1.08) rotate(2deg)}28%{transform:scale(1)}78%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.25)}}
-.woncard{display:flex;align-items:center;gap:12px;padding:12px 12px 12px 16px;border-radius:var(--r-lg)}
-.woncard .wt{flex:1;min-width:0}
-.woncard .wt b{display:block;font-size:17px;font-weight:800;letter-spacing:-.01em}
-.woncard .wt span{font-size:13px;color:var(--fg-2)}
-.woncard .wbtns{display:flex;gap:6px;flex:none}
-.woncard button{height:40px;padding:0 14px;border-radius:999px;font-weight:700;font-size:14px;background:var(--hair)}
-.woncard button.go{background:linear-gradient(150deg,var(--fox),var(--fox-2));color:var(--fox-ink)}
-@media (max-width:400px){.woncard{flex-wrap:wrap}.woncard .wbtns{width:100%}.woncard button{flex:1}}
 
 /* install as app */
 .steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:12px}
@@ -437,6 +429,12 @@ h1 .peek .pk{animation:peek 5.5s ease-in-out .8s infinite}
 .steps .n svg{width:22px;height:22px;color:#2f7fd8}
 .steps b{font-weight:700}
 
+.wonbadge{position:absolute;left:50%;top:50%;z-index:4;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:4px;padding:14px 26px;border-radius:24px;background:var(--glass-strong);
+  box-shadow:inset 0 1px 0 var(--glass-edge),0 18px 40px -12px rgba(0,0,0,.35),0 0 0 1px rgba(255,210,87,.5);animation:badgein .7s cubic-bezier(.2,.9,.3,1.4) var(--bd,0s) both}
+.wonbadge b{font-size:clamp(24px,7vw,32px);font-weight:900;letter-spacing:-.03em;background:linear-gradient(150deg,#ffb020,var(--fox) 55%,var(--fox-2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.wonbadge span{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-2)}
+@keyframes badgein{from{opacity:0;transform:translate(-50%,-50%) scale(.5)}}
+
 /* share */
 .sharerow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .sharerow button{height:46px;border-radius:999px;font-weight:600;font-size:15px;background:var(--hair);display:flex;align-items:center;justify-content:center;gap:8px}
@@ -444,7 +442,10 @@ h1 .peek .pk{animation:peek 5.5s ease-in-out .8s infinite}
 /* phones: title on its own line, game mode under the toolbar */
 @media (max-width:600px){
   header{grid-template-areas:"eye btns" "title title";align-items:center;row-gap:8px}
-  header .eyebrow{font-size:12px;letter-spacing:.04em}
+  header .eyebrow{font-size:11px;letter-spacing:.02em}
+  header .hbtns{gap:6px}
+  header .circle{width:38px;height:38px}
+  header .circle svg{width:19px;height:19px}
   header h1{white-space:nowrap;font-size:clamp(28px,9.6vw,40px)}
   .modeline{display:none}
   .dock{bottom:calc(32px + env(safe-area-inset-bottom,0px))}
@@ -476,7 +477,7 @@ h1 .peek .pk{animation:peek 5.5s ease-in-out .8s infinite}
 <main class="app">
   <div class="wrap">
     <header>
-        <div class="eyebrow">Логическая игра · 1985 — 2026</div>
+        <div class="eyebrow">Логическая игра · 1985–2026</div>
         <h1>Охота на&nbsp;лис <span class="peek" id="peek" aria-hidden="true"></span></h1>
       <div class="hbtns">
         <button class="circle glass" id="btnRules" aria-label="Правила">
@@ -506,11 +507,7 @@ h1 .peek .pk{animation:peek 5.5s ease-in-out .8s infinite}
         <b>Пауза</b><span>Лес спрятан, время стоит</span>
       </div>
       <div class="winflash" id="winflash" aria-hidden="true"><b>Победа!</b></div>
-    </section>
-
-    <section class="woncard glass" id="woncard" hidden aria-live="polite">
-      <div class="wt"><b id="wonTitle">🏆 Победа!</b><span id="wonSub"></span></div>
-      <div class="wbtns"><button id="wonShow">Результат</button><button class="go" id="wonNew">Новая игра</button></div>
+      <button class="wonbadge glass" id="wonbadge" hidden><b>🏆 Победа!</b><span id="wonTier"></span></button>
     </section>
 
     <p class="hint" id="hint"></p>
@@ -777,13 +774,11 @@ function render(animate = true){
   $('btnHints').setAttribute('aria-checked', String(S.hints));
   const won = !!S.end;
   board.classList.toggle('won', won); $('boardcard').classList.toggle('won', won);
-  $('woncard').hidden = !won; $('hint').hidden = won;
+  $('wonbadge').hidden = !won;
   if (won){
     S.foxes.forEach((f, k) => cells[f]?.style.setProperty('--fd', (k * .17) + 's'));
     cells.forEach((c, i) => { if (!S.opened.includes(i)) c.style.setProperty('--sd', (-(i * 7 % 11) * .27) + 's'); });
-    const m = S.opened.length;
-    $('wonTitle').textContent = `🏆 Победа! ${m} ${plural(m, 'ход', 'хода', 'ходов')} · ${fmt(elapsed())}`;
-    $('wonSub').textContent = `«${tierOf(m).badge}» · ${LV.name}${S.daily ? ' · игра дня' : ''}`;
+    $('wonTier').textContent = tierOf(S.opened.length).badge;
   }
   $('hint').textContent = S.end ? 'Все лисы найдены! Начните новую игру или сохраните результат.'
     : S.opened.length === 0 ? `Нажмите на любую клетку леса. Здесь прячутся ${FOXES} ${plural(FOXES, 'лиса', 'лисы', 'лис')}. Цифра покажет, сколько их на той же горизонтали, вертикали и диагоналях.`
@@ -887,9 +882,9 @@ function celebrate(from){
   board.classList.remove('cheer'); void board.offsetWidth; board.classList.add('cheer');
   setTimeout(() => board.classList.remove('cheer'), far * 70 + 800);
   const f = $('winflash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
+  const wb = $('wonbadge'); wb.style.setProperty('--bd', '2s'); wb.hidden = true; void wb.offsetWidth; wb.hidden = false;
 }
-$('wonShow').onclick = () => win();
-$('wonNew').onclick = () => newGame();
+$('wonbadge').onclick = () => win();
 
 // ---------- moves ----------
 function openCell(i){
@@ -938,6 +933,7 @@ function newGame(){
   S = newState(); prevDead = new Set(); closeSheets();
   buildBoard();
   board.classList.remove('shake'); void board.offsetWidth; board.classList.add('shake');
+  $('wonbadge').style.setProperty('--bd', '0s');
   render(false); persist();
   if (S.daily){
     const done = store.get('dailyDone', {})[S.daily + '|' + S.level];
