@@ -1331,8 +1331,8 @@ function renderStats(){
       return `<rect class="hit" x="${padL + k * bw}" y="${padT}" width="${bw}" height="${H - padT - padB}" data-tip="${when} · ${g.moves} ${plural(g.moves, 'ход', 'хода', 'ходов')} · ${fmt(g.ms)}${g.daily ? ' · игра дня' : ''}"/><path class="bar${g.moves === best ? ' best' : ''}" d="${d}"/>`;
     }).join('');
     html += `<div class="chartbox"><h3>Последние ${last.length} ${plural(last.length, 'игра', 'игры', 'игр')}</h3><p>Сколько ходов понадобилось. Чем ниже столбик, тем лучше.</p>
-      <svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Ходы в последних играх: лучший результат ${best}, в среднем ${a.toFixed(1)}">${ticks}${bars}
-      <line class="avg" x1="${padL}" x2="${W}" y1="${y(a)}" y2="${y(a)}"/><text class="avgl" x="${W}" y="${y(a) - 4}" text-anchor="end">в среднем ${a.toFixed(1).replace('.', ',')}</text></svg>
+      <svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Ходы в последних играх: лучший результат ${best}, в среднем ${Math.round(a)}">${ticks}${bars}
+      <line class="avg" x1="${padL}" x2="${W}" y1="${y(a)}" y2="${y(a)}"/><text class="avgl" x="${W}" y="${y(a) - 4}" text-anchor="end">в среднем ${Math.round(a)}</text></svg>
       <div class="legend"><span><i style="background:var(--accent)"></i>ходы в игре</span><span><i style="background:var(--fox)"></i>лучшая</span></div>
       <div class="tip" id="tip"></div></div>`;
   } else if (!wins){
