@@ -1425,9 +1425,6 @@ if ('serviceWorker' in navigator) addEventListener('load', () => {
     // re-check for a new version whenever the app comes back to the screen
     document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
   }).catch(() => {});
-  // a new version took over: reload once so the player sees it
-  let reloaded = false; const hadOld = !!navigator.serviceWorker.controller;   // not on the very first visit
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadOld && !reloaded){ reloaded = true; location.reload(); } });
 });
 </script>
 </body>
