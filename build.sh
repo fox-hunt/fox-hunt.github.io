@@ -6,6 +6,8 @@ rm -rf docs && mkdir -p docs/icons
 cp assets/icon-180.png assets/icon-192.png assets/icon-512.png assets/icon-maskable-512.png docs/icons/
 cp assets/icon-round.svg docs/icons/favicon.svg
 cp assets/author.jpg docs/icons/author.jpg
+cp assets/favicon-32.png assets/favicon-64.png docs/icons/
+cp assets/favicon-64.png docs/favicon.ico
 VER=$(date +%Y%m%d%H%M%S)
 {
   cat <<'HEAD'
@@ -20,7 +22,10 @@ VER=$(date +%Y%m%d%H%M%S)
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Охота на лис">
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="64x64" href="icons/favicon-64.png">
 <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
+<link rel="shortcut icon" href="favicon.ico">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
 </head>
