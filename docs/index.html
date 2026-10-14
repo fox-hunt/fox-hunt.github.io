@@ -132,6 +132,8 @@ h1 .peekfox .rise,h1 .peekfox .tail{animation:none}
 @media (hover:hover){.cell.closed:not(.dead):hover .tree{animation:rustle .6s ease-in-out}}
 @keyframes rustle{25%{transform:rotate(-6deg)}60%{transform:rotate(5deg)}}
 .cell.dead .tree{filter:grayscale(1);opacity:.28}
+.cell.dead.fresh .tree{animation:shiver .75s ease-in-out var(--d,0s) both}
+@keyframes shiver{0%{transform:none}15%{transform:rotate(-12deg) scale(1.08)}35%{transform:rotate(10deg) scale(1.08)}55%{transform:rotate(-7deg)}75%{transform:rotate(4deg)}100%{transform:none}}
 .lf1{fill:var(--leaf-1)} .lf2{fill:var(--leaf-2)} .lf3{fill:var(--leaf-3)} .trk{fill:var(--trunk)} .gnd{fill:var(--ground)}
 .fur{fill:var(--fur)} .fur2{fill:var(--fur-2)} .crm{fill:var(--cream)} .ink{fill:var(--ink)} .iris{fill:var(--iris)}
 .foxsvg{width:96%;height:96%;overflow:visible}
@@ -699,8 +701,9 @@ function buildBoard(){
 function sizeCells(){ if (cells.length) board.style.setProperty('--cs', (board.clientWidth / N) + 'px'); }
 try { new ResizeObserver(sizeCells).observe(board); } catch { addEventListener('resize', sizeCells); }
 
-let prevDead = new Set();
+let prevDead = new Set(), freshT = 0;
 function render(animate = true){
+  let freshN = 0;
   const { done, dead } = S.hints ? analyse() : { done: new Set(), dead: new Map() };
   cells.forEach((b, i) => {
     const open = S.opened.includes(i), fox = open && isFox(i), isDead = dead.has(i) && !fox;
@@ -710,6 +713,7 @@ function render(animate = true){
     b.classList.toggle('done', done.has(i));
     b.classList.toggle('dead', isDead);
     const fresh = isDead && !prevDead.has(i) && animate;
+    b.classList.toggle('fresh', fresh && !open); if (fresh && !open) freshN++;
     b.style.setProperty('--d', fresh ? (dead.get(i) * 0.045) + 's' : '0s');
     const where = `Ряд ${(i / N | 0) + 1}, столбец ${i % N + 1}`;
     if (open){
@@ -727,6 +731,7 @@ function render(animate = true){
     }
   });
   prevDead = new Set([...dead.keys()]);
+  if (freshN){ sfx('forest', freshN); clearTimeout(freshT); freshT = setTimeout(() => cells.forEach(c => c.classList.remove('fresh')), 1800); }
   const f = found().length;
   $('sMoves').textContent = S.opened.length;
   [...$('sFox').children].forEach((d, k) => d.classList.toggle('on', k < f));
@@ -795,12 +800,27 @@ function noise(dur, { vol = .12, freq = 2400, at = 0 } = {}){
   flt.type = 'bandpass'; flt.frequency.value = freq; flt.Q.value = .8; g.gain.value = vol;
   src.buffer = buf; src.connect(flt).connect(g).connect(c.destination); src.start(t);
 }
-function sfx(name){
+function forest(n){
+  const c = ac(); if (!c) return;
+  const dur = Math.min(2.2, .9 + n * .03), vol = Math.min(.32, .12 + n * .006), t = c.currentTime;
+  const len = c.sampleRate * dur | 0, buf = c.createBuffer(2, len, c.sampleRate);
+  for (let ch = 0; ch < 2; ch++){ const d = buf.getChannelData(ch); let b = 0; for (let i = 0; i < len; i++){ b = .97 * b + .03 * (Math.random() * 2 - 1); d[i] = (Math.random() * 2 - 1) * .55 + b * 3; } }
+  const src = c.createBufferSource(); src.buffer = buf;
+  const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = .6;
+  bp.frequency.setValueAtTime(700, t); bp.frequency.linearRampToValueAtTime(2600, t + dur * .45); bp.frequency.linearRampToValueAtTime(1100, t + dur);
+  const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 280;
+  const g = c.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + dur * .3); g.gain.linearRampToValueAtTime(vol * .7, t + dur * .6); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  const lfo = c.createOscillator(), lg = c.createGain(); lfo.frequency.value = 5.5; lg.gain.value = vol * .35; lfo.connect(lg).connect(g.gain);
+  src.connect(hp).connect(bp).connect(g).connect(c.destination);
+  src.start(t); lfo.start(t); lfo.stop(t + dur); src.stop(t + dur);
+}
+function sfx(name, n = 1){
   if (!SET.sound) return;
   try {
     if (name === 'open'){ noise(.16, { vol: .16, freq: 2600 }); tone(520, .12, { vol: .07, to: 380 }); }
     if (name === 'fox'){ noise(.18, { vol: .14 }); tone(760, .12, { type: 'triangle', vol: .16, to: 1250 }); tone(980, .14, { type: 'triangle', vol: .14, at: .13, to: 1500 }); }
     if (name === 'nope'){ tone(170, .14, { type: 'triangle', vol: .16, to: 120 }); }
+    if (name === 'forest'){ forest(n); }
     if (name === 'pause'){ tone(660, .08, { vol: .08 }); }
     if (name === 'win'){ [523, 659, 784, 1047].forEach((f, k) => tone(f, .35, { type: 'triangle', vol: .14, at: k * .12 })); tone(1568, .6, { vol: .08, at: .5 }); tone(2093, .6, { vol: .06, at: .62 }); }
     if (name === 'ach'){ tone(1319, .5, { vol: .1 }); tone(1760, .7, { vol: .09, at: .1 }); tone(2637, .5, { vol: .04, at: .2 }); }
