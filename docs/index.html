@@ -429,10 +429,6 @@ h1 .peekfox .rise,h1 .peekfox .tail{animation:none}
 @media (max-width:400px){.woncard{flex-wrap:wrap}.woncard .wbtns{width:100%}.woncard button{flex:1}}
 
 /* install as app */
-.installbar{display:flex;align-items:center;gap:10px;padding:8px 8px 8px 14px;border-radius:999px;align-self:center;max-width:100%}
-.installbar .ib{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;min-width:0}
-.installbar .ib span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.installbar .ix{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--hair);flex:none;font-size:16px;line-height:1}
 .steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:12px}
 .steps li{display:grid;grid-template-columns:40px 1fr;gap:12px;align-items:center;font-size:16px;line-height:1.45}
 .steps .n{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--tile);font-weight:800}
@@ -508,7 +504,6 @@ h1 .peekfox .rise,h1 .peekfox .tail{animation:none}
     </section>
 
     <p class="hint" id="hint"></p>
-    <div class="installbar glass" id="installBar" hidden><button class="ib" id="installGo">📲 <span>Установить игру на телефон</span></button><button class="ix" id="installX" aria-label="Скрыть">×</button></div>
   </div>
 </main>
 
@@ -567,6 +562,10 @@ h1 .peekfox .rise,h1 .peekfox .tail{animation:none}
       <button class="row" role="switch" id="optPoses" aria-checked="true"><span class="ri">🦊</span><span class="rt"><b>Лисы прячутся по-разному</b><span>Одна спит, другая машет лапой, третья ест яблоко.</span></span><i class="switch"></i></button>
       <div class="poses" id="posePreview" aria-hidden="true"></div>
       <button class="row" role="switch" id="optSound" aria-checked="true"><span class="ri">🔊</span><span class="rt"><b>Звуки</b><span>Шорох листвы, тявканье лис и фанфары.</span></span><i class="switch"></i></button>
+    </div>
+
+    <div class="group" id="installGroup" hidden>
+      <button class="row" id="installGo"><span class="ri">📲</span><span class="rt"><b>Установить на телефон</b><span>Иконка с лисичкой на экране «Домой», игра на весь экран и без интернета.</span></span><span class="ri" aria-hidden="true">›</span></button>
     </div>
 
     <div class="sect">Тема</div>
@@ -1357,12 +1356,11 @@ function renderStats(){
   const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const embedded = window.top !== window.self;
   let prompt = null;
-  const show = on => { $('installBar').hidden = !on || standalone || embedded || store.get('installHidden', false); };
+  const show = on => { $('installGroup').hidden = !on || standalone || embedded; };
   const SHARE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
   addEventListener('beforeinstallprompt', e => { e.preventDefault(); prompt = e; show(true); });
   addEventListener('appinstalled', () => { prompt = null; show(false); toast('Игра установлена! Ищите лисичку на экране'); });
   if (ios) show(true);
-  $('installX').onclick = () => { store.set('installHidden', true); show(false); };
   $('installGo').onclick = async () => {
     if (prompt){ prompt.prompt(); const r = await prompt.userChoice.catch(() => null); if (r?.outcome === 'accepted') show(false); prompt = null; return; }
     $('instSteps').innerHTML = ios
