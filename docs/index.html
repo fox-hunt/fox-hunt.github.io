@@ -188,6 +188,8 @@ h1 .peekfox .rise,h1 .peekfox .tail{animation:none}
   border-radius:var(--r-xl) var(--r-xl) 0 0;background:var(--glass-strong);
   padding:10px max(20px,env(safe-area-inset-right,0px)) calc(22px + env(safe-area-inset-bottom,0px)) max(20px,env(safe-area-inset-left,0px))}
 .sheet.show{transform:translate(-50%,0)}
+#sheetRecords{height:min(88%,820px)}
+#sheetRecords .body{flex:1}
 .grab{width:38px;height:5px;border-radius:3px;background:var(--fg-3);margin:0 auto 12px;flex:none}
 .sheet h2{margin:0;font-size:26px;font-weight:800;letter-spacing:-.03em}
 .sheet .sub{margin:6px 0 0;color:var(--fg-2);font-size:17px;line-height:1.45}
@@ -509,10 +511,10 @@ h1 .peekfox .rise,h1 .peekfox .tail{animation:none}
 
 <section class="sheet glass" id="sheetRecords" role="dialog" aria-modal="true" aria-labelledby="recT" hidden>
   <div class="grab"></div>
-  <div class="shead"><div><h2 id="recT">Достижения</h2><p class="sub" id="recSub">Меньше ходов — выше место. При равных ходах решает время.</p></div>
+  <div class="shead"><div><h2 id="recT">Достижения</h2><p class="sub" id="recSub">Ваши рекорды, статистика и значки по каждому уровню.</p></div>
     <button class="x" data-close aria-label="Закрыть"><svg viewBox="0 0 14 14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M2 2l10 10M12 2 2 12"/></svg></button></div>
   <div class="body">
-    <div class="seg tabs" id="tabSeg" style="--k:3"><i class="pill"></i><button data-v="rec">Рекорды</button><button data-v="stats">Статистика</button><button data-v="badges">Значки</button></div>
+    <div class="seg tabs" id="tabSeg" style="--k:2"><i class="pill"></i><button data-v="rec">Рекорды</button><button data-v="stats">Статистика</button></div>
     <div class="seg" id="lvlSeg" style="--k:3"><i class="pill"></i><button data-v="kid">Лисёнок</button><button data-v="classic">Классика</button><button data-v="pro">Профи</button></div>
     <div class="pane" id="paneRec">
       <div class="seg" id="seg" style="--k:2"><i class="pill"></i><button data-v="all">Все игроки</button><button data-v="mine">Мои игры</button></div>
@@ -522,7 +524,7 @@ h1 .peekfox .rise,h1 .peekfox .tail{animation:none}
       <div class="clear" id="clearBox"></div>
     </div>
     <div class="pane" id="paneStats" hidden></div>
-    <div class="pane" id="paneBadges" hidden>
+    <div class="pane" id="paneBadges">
       <div class="sect" id="badgeTitle">Значки</div>
       <div class="badges" id="badges"></div>
     </div>
@@ -1088,10 +1090,7 @@ const keyOf = r => r.at + '|' + r.name;
 const ofLevel = r => (r.level || 'classic') === recLevel;
 function renderRecords(){
   segSet($('tabSeg'), recPane);
-  $('paneRec').hidden = recPane !== 'rec'; $('paneStats').hidden = recPane !== 'stats'; $('paneBadges').hidden = recPane !== 'badges';
-  $('lvlSeg').hidden = recPane === 'badges';
-  $('recSub').textContent = recPane === 'rec' ? 'Меньше ходов — выше место. При равных ходах решает время.'
-    : recPane === 'stats' ? 'Ваши игры на этом устройстве.' : 'Собирайте значки за особые победы.';
+  $('paneRec').hidden = recPane !== 'rec'; $('paneStats').hidden = recPane !== 'stats';
   if (recPane === 'stats') renderStats();
   seg.hidden = !db; if (!db) recTab = 'mine';
   segSet(seg, recTab); segSet($('lvlSeg'), recLevel);
@@ -1122,7 +1121,7 @@ function renderRecords(){
   syncDots();
   $('recNote').textContent = recMode === 'select' ? 'Отметьте результаты, которые нужно удалить.' : recTab === 'all'
     ? (db ? 'Общая таблица: её видят все, кто открывает игру по этой ссылке.' : dbState === 'loading' ? 'Подключаемся к общей таблице…' : 'Общая таблица недоступна. Показаны результаты с этого устройства.')
-    : 'Результаты хранятся только на этом устройстве.';
+    : 'Меньше ходов — выше место, при равных ходах решает время. Результаты хранятся на этом устройстве.';
   const n = picked.size;
   $('clearBox').innerHTML = !canEdit || !list.length ? ''
     : recMode === 'select' ? `<button class="danger" data-act="askSel"${n ? '' : ' disabled'}>Удалить${n ? ' (' + n + ')' : ''}</button><button data-act="all">Выбрать все</button><button data-act="no">Отмена</button>`
