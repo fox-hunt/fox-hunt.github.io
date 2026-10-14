@@ -33,7 +33,17 @@ VER=$(date +%Y%m%d%H%M%S)
 HEAD
   cat index.html
   cat <<'FOOT'
-<script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
+<script>
+if ('serviceWorker' in navigator) addEventListener('load', () => {
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+    // re-check for a new version whenever the app comes back to the screen
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+  }).catch(() => {});
+  // a new version took over: reload once so the player sees it
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded && navigator.serviceWorker.controller){ reloaded = true; location.reload(); } });
+});
+</script>
 </body>
 </html>
 FOOT
@@ -66,7 +76,7 @@ self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Pr
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   e.respondWith(caches.open(CACHE).then(c =>
-    fetch(e.request).then(r => { if (r.ok || r.type === 'opaque') c.put(e.request, r.clone()); return r; })
+    fetch(e.request, new URL(e.request.url).origin === location.origin ? { cache: 'no-cache' } : {}).then(r => { if (r.ok || r.type === 'opaque') c.put(e.request, r.clone()); return r; })
       .catch(() => c.match(e.request).then(hit => hit || c.match('index.html')))
   ));
 });
