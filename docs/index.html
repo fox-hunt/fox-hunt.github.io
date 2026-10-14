@@ -428,6 +428,17 @@ h1 .peekfox .rise,h1 .peekfox .tail{animation:none}
 .woncard button.go{background:linear-gradient(150deg,var(--fox),var(--fox-2));color:var(--fox-ink)}
 @media (max-width:400px){.woncard{flex-wrap:wrap}.woncard .wbtns{width:100%}.woncard button{flex:1}}
 
+/* install as app */
+.installbar{display:flex;align-items:center;gap:10px;padding:8px 8px 8px 14px;border-radius:999px;align-self:center;max-width:100%}
+.installbar .ib{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;min-width:0}
+.installbar .ib span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.installbar .ix{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--hair);flex:none;font-size:16px;line-height:1}
+.steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:12px}
+.steps li{display:grid;grid-template-columns:40px 1fr;gap:12px;align-items:center;font-size:16px;line-height:1.45}
+.steps .n{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--tile);font-weight:800}
+.steps .n svg{width:22px;height:22px;color:#2f7fd8}
+.steps b{font-weight:700}
+
 /* share */
 .sharerow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .sharerow button{height:46px;border-radius:999px;font-weight:600;font-size:15px;background:var(--hair);display:flex;align-items:center;justify-content:center;gap:8px}
@@ -497,6 +508,7 @@ h1 .peekfox .rise,h1 .peekfox .tail{animation:none}
     </section>
 
     <p class="hint" id="hint"></p>
+    <div class="installbar glass" id="installBar" hidden><button class="ib" id="installGo">📲 <span>Установить игру на телефон</span></button><button class="ix" id="installX" aria-label="Скрыть">×</button></div>
   </div>
 </main>
 
@@ -526,6 +538,16 @@ h1 .peekfox .rise,h1 .peekfox .tail{animation:none}
       <p>По мотивам игры А. Несчётного («Наука и жизнь», № 12, 1985), созданной для калькулятора «Электроника МК-54».</p>
       <div class="dev"><img class="ava" src="icons/author.jpg" alt="Ирина Мальцева" width="64" height="64" onerror="this.remove()"><p>Разработчик: <b>Ирина Мальцева</b><br><a href="mailto:maltsevaie@gmail.com">maltsevaie@gmail.com</a><br>Версия 2.0</p></div>
     </div>
+    <button class="primary wide" data-close>Понятно</button>
+  </div>
+</section>
+
+<section class="sheet glass" id="sheetInstall" role="dialog" aria-modal="true" aria-labelledby="instT" hidden>
+  <div class="grab"></div>
+  <div class="shead"><div><h2 id="instT">Установить игру</h2><p class="sub" id="instSub">Иконка с лисичкой появится на экране «Домой», и игра будет открываться как приложение, даже без интернета.</p></div>
+    <button class="x" data-close aria-label="Закрыть"><svg viewBox="0 0 14 14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M2 2l10 10M12 2 2 12"/></svg></button></div>
+  <div class="body">
+    <ol class="steps" id="instSteps"></ol>
     <button class="primary wide" data-close>Понятно</button>
   </div>
 </section>
@@ -1328,6 +1350,31 @@ function renderStats(){
   chart.addEventListener('pointermove', show); chart.addEventListener('pointerdown', show);
   chart.addEventListener('pointerleave', () => { tip.classList.remove('show'); chart.querySelectorAll('.bar.on').forEach(b => b.classList.remove('on')); });
 }
+
+// ---------- install as an app ----------
+(() => {
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const embedded = window.top !== window.self;
+  let prompt = null;
+  const show = on => { $('installBar').hidden = !on || standalone || embedded || store.get('installHidden', false); };
+  const SHARE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
+  addEventListener('beforeinstallprompt', e => { e.preventDefault(); prompt = e; show(true); });
+  addEventListener('appinstalled', () => { prompt = null; show(false); toast('Игра установлена! Ищите лисичку на экране'); });
+  if (ios) show(true);
+  $('installX').onclick = () => { store.set('installHidden', true); show(false); };
+  $('installGo').onclick = async () => {
+    if (prompt){ prompt.prompt(); const r = await prompt.userChoice.catch(() => null); if (r?.outcome === 'accepted') show(false); prompt = null; return; }
+    $('instSteps').innerHTML = ios
+      ? `<li><span class="n">${SHARE}</span><span>Нажмите кнопку <b>«Поделиться»</b> внизу экрана Safari (квадрат со стрелкой вверх).</span></li>
+         <li><span class="n">＋</span><span>Пролистайте меню и выберите <b>«На экран „Домой“»</b>.</span></li>
+         <li><span class="n">✓</span><span>Нажмите <b>«Добавить»</b>. Готово, лисичка на экране!</span></li>`
+      : `<li><span class="n">⋮</span><span>Откройте меню браузера (три точки в углу).</span></li>
+         <li><span class="n">＋</span><span>Выберите <b>«Установить приложение»</b> или <b>«Добавить на главный экран»</b>.</span></li>
+         <li><span class="n">✓</span><span>Подтвердите. Готово, лисичка на экране!</span></li>`;
+    openSheet('sheetInstall');
+  };
+})();
 
 // ---------- confetti ----------
 function confetti(n = 140){
