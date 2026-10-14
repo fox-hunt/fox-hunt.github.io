@@ -350,7 +350,8 @@ h1 .peek .pk{animation:peek 5.5s ease-in-out .8s infinite}
 /* stats */
 .tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .tile{display:flex;flex-direction:column;gap:2px;padding:12px;border-radius:var(--r-md);background:var(--tile);min-width:0}
-.tile .tk{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .tk{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-2);line-height:1.25}
+@media (max-width:600px){.tile{padding:10px}.tile .tk{min-height:2.5em;letter-spacing:.03em}.tile .tv{font-size:22px}}
 .tile .tv{font-family:var(--font-num);font-size:24px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.15}
 .tile .ts{font-size:12px;color:var(--fg-3)}
 .streak{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:var(--r-md);background:var(--tile)}
@@ -1314,7 +1315,7 @@ function renderStats(){
     ${tile('Побед', wins, played ? Math.round(wins / played * 100) + '%' : '')}
     ${tile('Без подсказок', games.filter(g => !g.hints).length)}
     ${tile('Лучший', wins ? Math.min(...mv) : '—', wins ? plural(Math.min(...mv), 'ход', 'хода', 'ходов') : '')}
-    ${tile('В среднем', wins ? avg(mv).toFixed(1).replace('.', ',') : '—', wins ? 'ходов' : '')}
+    ${tile('В среднем', wins ? Math.round(avg(mv)) : '—', wins ? plural(Math.round(avg(mv)), 'ход', 'хода', 'ходов') : '')}
     ${tile('Лучшее время', wins ? fmt(Math.min(...tm)) : '—', wins ? 'в среднем ' + fmt(avg(tm)) : '')}
   </div>
   <div class="streak"><span class="si">${streak ? '🔥' : '📅'}</span><span><b>${streak ? `${streak} ${plural(streak, 'день', 'дня', 'дней')} подряд` : 'Серии пока нет'}</b><span>${streak ? 'Игра дня пройдена без пропусков' : 'Включите «Игру дня» в настройках и проходите её каждый день'}</span></span></div>`;
