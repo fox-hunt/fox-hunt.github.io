@@ -382,16 +382,25 @@ h1 .peek .pk{animation:peek 5.5s ease-in-out .8s infinite}
 .chart{width:100%;height:auto;display:block;overflow:visible}
 .chart .grid{stroke:var(--hair);stroke-width:1}
 .chart .axis{fill:var(--fg-3);font-size:10px;font-family:var(--font-num);font-variant-numeric:tabular-nums}
-.chart .bar{fill:var(--accent)}
-.chart .bar.best{fill:var(--fox)}
+.chart .ln{fill:none;stroke:var(--accent);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.chart .dot{fill:var(--accent);stroke:var(--bg);stroke-width:2;transition:r .15s}
+.chart .dot.best{fill:var(--fox)}
+.chart .dot.on{r:6}
 .chart .hit{fill:transparent;cursor:pointer}
-.chart .hit:hover + .bar,.chart .bar.on{opacity:.75}
+.chead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.chead h3{margin:0}
+.seg.mini{padding:2px;border-radius:9px;min-width:0}
+.seg.mini .pill{top:2px;left:2px;height:26px;border-radius:7px;width:calc((100% - 4px) / var(--k,2))}
+.seg.mini button{height:26px;font-size:12px;padding:0 8px;border-radius:7px}
+.swipe{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}
+.swipe::-webkit-scrollbar{display:none}
+.spage{flex:0 0 100%;min-width:0;scroll-snap-align:start;display:flex;flex-direction:column;gap:14px;padding-inline:1px}
+.cempty{margin:6px 0 2px;font-size:13.5px;line-height:1.45;color:var(--fg-2)}
+.trend{margin:8px 0 0;font-size:13.5px;line-height:1.45;color:var(--fg-2)}
 .chart .avg{stroke:var(--fg-2);stroke-width:1.5;stroke-dasharray:4 4}
 .chart .avgl{fill:var(--fg-2);font-size:10px;font-weight:600}
 .tip{position:absolute;pointer-events:none;padding:6px 10px;border-radius:10px;background:var(--glass-strong);border:1px solid var(--glass-edge);box-shadow:0 8px 20px -8px var(--glass-shadow);font-size:12.5px;font-weight:600;white-space:nowrap;transform:translate(-50%,-100%);opacity:0;transition:opacity .15s}
 .tip.show{opacity:1}
-.legend{display:flex;gap:14px;font-size:12px;color:var(--fg-2);margin-top:6px}
-.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
 /* splash: the fox steps out from behind the tree */
 #splash{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:var(--bg);transition:opacity .5s,visibility .5s}
 #splash.hide{opacity:0;visibility:hidden}
@@ -1227,7 +1236,7 @@ const keyOf = r => r.at + '|' + r.name;
 const ofLevel = r => (r.level || 'classic') === recLevel;
 function renderRecords(){
   segSet($('tabSeg'), recPane);
-  $('paneRec').hidden = recPane !== 'rec'; $('paneStats').hidden = recPane !== 'stats';
+  $('paneRec').hidden = recPane !== 'rec'; $('paneStats').hidden = recPane !== 'stats'; $('paneBadges').hidden = recPane !== 'rec';
   if (recPane === 'stats') renderStats();
   seg.hidden = !db; if (!db) recTab = 'mine';
   segSet(seg, recTab); segSet($('lvlSeg'), recLevel);
@@ -1345,67 +1354,76 @@ function renderStats(){
     ${tile('Лучшее время', wins ? fmt(Math.min(...tm)) : '—', wins ? 'в среднем ' + fmt(avg(tm)) : '')}
   </div>
   <div class="streak"><span class="si">${streak ? '🔥' : '📅'}</span><span><b>${streak ? `${streak} ${plural(streak, 'день', 'дня', 'дней')} подряд` : 'Серии пока нет'}</b><span>${streak ? 'Игра дня пройдена без пропусков' : 'Включите «Игру дня» в настройках и проходите её каждый день'}</span></span></div>`;
-  const last = games.slice(-20);
-  if (last.length >= 2){
-    const W = 320, H = 150, padL = 26, padB = 18, padT = 14, max = Math.max(...last.map(g => g.moves)), top = Math.ceil(max / 10) * 10 || 10;
-    const bw = (W - padL) / last.length, y = v => padT + (H - padT - padB) * (1 - v / top), best = Math.min(...last.map(g => g.moves)), a = avg(last.map(g => g.moves));
-    const ticks = [0, top / 2, top].map(v => `<line class="grid" x1="${padL}" x2="${W}" y1="${y(v)}" y2="${y(v)}"/><text class="axis" x="${padL - 6}" y="${y(v) + 3}" text-anchor="end">${Math.round(v)}</text>`).join('');
-    const bars = last.map((g, k) => {
-      const x = padL + k * bw + 2, w = Math.max(3, bw - 4), h = y(0) - y(g.moves), r = Math.min(4, w / 2);
-      const d = `M${x},${y(0)} v${-(h - r)} q0,${-r} ${r},${-r} h${w - 2 * r} q${r},0 ${r},${r} v${h - r} z`;
-      const when = new Date(g.at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
-      return `<rect class="hit" x="${padL + k * bw}" y="${padT}" width="${bw}" height="${H - padT - padB}" data-tip="${when} · ${g.moves} ${plural(g.moves, 'ход', 'хода', 'ходов')} · ${fmt(g.ms)}${g.daily ? ' · игра дня' : ''}"/><path class="bar${g.moves === best ? ' best' : ''}" d="${d}"/>`;
-    }).join('');
-    html += `<div class="chartbox"><h3>Последние ${last.length} ${plural(last.length, 'игра', 'игры', 'игр')}</h3><p>Сколько ходов понадобилось. Чем ниже столбик, тем лучше.</p>
-      <svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Ходы в последних играх: лучший результат ${best}, в среднем ${Math.round(a)}">${ticks}${bars}
-      <line class="avg" x1="${padL}" x2="${W}" y1="${y(a)}" y2="${y(a)}"/><text class="avgl" x="${W}" y="${y(a) - 4}" text-anchor="end">в среднем ${Math.round(a)}</text></svg>
-      <div class="legend"><span><i style="background:var(--accent)"></i>ходы в игре</span><span><i style="background:var(--fox)"></i>лучшая</span></div>
-      <div class="tip" id="tip"></div></div>`;
-  } else if (!wins){
-    html += `<div class="empty">Пройдите уровень «${L.name}», и здесь появится ваша статистика.</div>`;
+  // progress line: average moves per day over the chosen period
+  const DAY = 864e5, now = Date.now(), dayKey = t => { const d = new Date(t); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+  const span = { week: 7, month: 30, '3m': 91, all: 0 }[statPeriod];
+  const from = span ? dayKey(now) - (span - 1) * DAY : (games.length ? dayKey(games[0].at) : dayKey(now));
+  const inP = games.filter(g => g.at >= from);
+  const prev = span ? games.filter(g => g.at >= from - span * DAY && g.at < from) : games.slice(0, Math.floor(games.length / 2));
+  const cur = span ? inP : games.slice(Math.floor(games.length / 2));
+  const periodName = { week: 'неделю', month: 'месяц', '3m': '3 месяца', all: 'всё время' }[statPeriod];
+  const prevName = { week: 'неделей раньше', month: 'месяцем раньше', '3m': 'за 3 месяца до этого', all: 'в первых играх' }[statPeriod];
+  html += `<div class="chartbox"><div class="chead"><h3>Прогресс</h3>
+    <div class="seg mini" id="perSeg" style="--k:4"><i class="pill"></i><button data-v="week">Неделя</button><button data-v="month">Месяц</button><button data-v="3m">3 мес</button><button data-v="all">Всё</button></div></div>`;
+  if (inP.length < 5){
+    html += `<p class="cempty">График появится, когда за ${periodName} наберётся 5 побед на этом уровне. Сейчас ${inP.length}.</p></div>`;
   } else {
-    html += `<p class="note">График появится после второй победы на этом уровне.</p>`;
+    const days = [...inP.reduce((m, g) => { const k = dayKey(g.at); (m.get(k) || m.set(k, []).get(k)).push(g); return m; }, new Map())]
+      .map(([k, gs]) => ({ k, n: gs.length, avg: avg(gs.map(g => g.moves)), best: Math.min(...gs.map(g => g.moves)) })).sort((a, b) => a.k - b.k);
+    const W = 320, H = 150, padL = 26, padR = 8, padB = 20, padT = 12;
+    const x0 = Math.min(from, days[0].k), x1 = Math.max(dayKey(now), days[days.length - 1].k), xr = Math.max(DAY, x1 - x0);
+    const top = Math.ceil(Math.max(...days.map(d => d.avg)) / 10) * 10 || 10;
+    const X = t => padL + (W - padL - padR) * (t - x0) / xr, Y = v => padT + (H - padT - padB) * (1 - v / top);
+    const a = avg(inP.map(g => g.moves)), bestDay = days.reduce((b, d) => d.avg < b.avg ? d : b, days[0]);
+    const dshort = t => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }).replace('.', '');
+    const ticks = [0, top / 2, top].map(v => `<line class="grid" x1="${padL}" x2="${W - padR}" y1="${Y(v)}" y2="${Y(v)}"/><text class="axis" x="${padL - 6}" y="${Y(v) + 3}" text-anchor="end">${v}</text>`).join('');
+    const xt = [x0, x0 + xr / 2, x1].map((t, k) => `<text class="axis" x="${X(t)}" y="${H - 5}" text-anchor="${['start', 'middle', 'end'][k]}">${dshort(t)}</text>`).join('');
+    const line = days.map((d, k) => `${k ? 'L' : 'M'}${X(d.k).toFixed(1)},${Y(d.avg).toFixed(1)}`).join(' ');
+    const area = `${line} L${X(days[days.length - 1].k).toFixed(1)},${Y(0)} L${X(days[0].k).toFixed(1)},${Y(0)} Z`;
+    const dots = days.map(d => `<circle class="hit" cx="${X(d.k)}" cy="${Y(d.avg)}" r="12" data-tip="${dshort(d.k)} · ${d.n} ${plural(d.n, 'игра', 'игры', 'игр')} · в среднем ${Math.round(d.avg)} · лучший ${d.best}"/><circle class="dot${d === bestDay ? ' best' : ''}" cx="${X(d.k)}" cy="${Y(d.avg)}" r="4"/>`).join('');
+    html += `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Среднее число ходов по дням за ${periodName}: в среднем ${Math.round(a)}, лучший день ${Math.round(bestDay.avg)}">
+      <defs><linearGradient id="areaG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".22"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>
+      ${ticks}${xt}<path d="${area}" fill="url(#areaG)"/><path class="ln" d="${line}"/>
+      <line class="avg" x1="${padL}" x2="${W - padR}" y1="${Y(a)}" y2="${Y(a)}"/><text class="avgl" x="${W - padR}" y="${Y(a) - 4}" text-anchor="end">в среднем ${Math.round(a)}</text>${dots}</svg>
+      <div class="tip" id="tip"></div>`;
+    // one plain sentence about progress
+    const ca = Math.round(avg(cur.map(g => g.moves))), pa = prev.length ? Math.round(avg(prev.map(g => g.moves))) : null, diff = pa == null ? 0 : pa - ca;
+    const line2 = pa == null ? `За ${periodName} в среднем ${ca} ${plural(ca, 'ход', 'хода', 'ходов')}.`
+      : diff > 0 ? `📈 За ${periodName} в среднем ${ca} ${plural(ca, 'ход', 'хода', 'ходов')}, на ${diff} лучше, чем ${prevName}.`
+      : diff < 0 ? `📉 За ${periodName} в среднем ${ca} ${plural(ca, 'ход', 'хода', 'ходов')}, на ${-diff} больше, чем ${prevName}. Лисы стали хитрее!`
+      : `Держишь уровень: в среднем ${ca} ${plural(ca, 'ход', 'хода', 'ходов')}, как и ${prevName}.`;
+    html += `<p class="trend">${line2}<br><span style="color:var(--fox)">●</span> лучший день</p></div>`;
   }
-  $('paneStats').innerHTML = html;
+  // two swipeable screens: tiles first, progress line second
+  const cut = html.indexOf('<div class="chartbox">');
+  const p1 = html.slice(0, cut) + (wins ? '' : `<div class="empty">Пройдите уровень «${L.name}», и здесь появится ваша статистика.</div>`), p2 = html.slice(cut);
+  const keep = $('statSwipe')?.scrollLeft || 0;
+  $('paneStats').innerHTML = `<div class="swipe" id="statSwipe"><div class="spage">${p1}</div><div class="spage">${p2}</div></div>
+    <div class="dots" id="statDots"><button aria-label="Плитки"></button><button aria-label="Прогресс"></button></div>`;
+  const sw = $('statSwipe'), sdots = [...$('statDots').children];
+  sw.scrollLeft = keep;
+  const sync = () => { const k = Math.round(sw.scrollLeft / Math.max(1, sw.clientWidth)); sdots.forEach((d, i) => d.classList.toggle('on', i === k)); };
+  sw.addEventListener('scroll', () => requestAnimationFrame(sync), { passive: true });
+  sdots.forEach((d, i) => d.onclick = () => sw.scrollTo({ left: i * sw.clientWidth, behavior: 'smooth' }));
+  sync();
+  segSet($('perSeg'), statPeriod);
+  $('perSeg').addEventListener('click', e => { const v = e.target.closest('button')?.dataset.v; if (!v) return; statPeriod = v; store.set('statPeriod', v); renderStats(); });
   const chart = $('paneStats').querySelector('.chart'); if (!chart) return;
   const tip = $('tip'), box = chart.parentElement;
   const show = e => {
-    const h = e.target.closest('.hit'); chart.querySelectorAll('.bar.on').forEach(b => b.classList.remove('on'));
+    const h = e.target.closest('.hit'); chart.querySelectorAll('.dot.on').forEach(b => b.classList.remove('on'));
     if (!h){ tip.classList.remove('show'); return; }
-    h.nextElementSibling.classList.add('on');
-    const r = h.getBoundingClientRect(), br = box.getBoundingClientRect();
+    const dot = h.nextElementSibling; dot.classList.add('on');
+    const r = dot.getBoundingClientRect(), br = box.getBoundingClientRect();
     tip.textContent = h.dataset.tip;
-    tip.style.left = Math.max(70, Math.min(br.width - 70, r.left - br.left + r.width / 2)) + 'px';
-    tip.style.top = (h.nextElementSibling.getBoundingClientRect().top - br.top - 6) + 'px';
+    tip.style.left = Math.max(90, Math.min(br.width - 90, r.left - br.left + r.width / 2)) + 'px';
+    tip.style.top = (r.top - br.top - 8) + 'px';
     tip.classList.add('show');
   };
   chart.addEventListener('pointermove', show); chart.addEventListener('pointerdown', show);
-  chart.addEventListener('pointerleave', () => { tip.classList.remove('show'); chart.querySelectorAll('.bar.on').forEach(b => b.classList.remove('on')); });
+  chart.addEventListener('pointerleave', () => { tip.classList.remove('show'); chart.querySelectorAll('.dot.on').forEach(b => b.classList.remove('on')); });
 }
-
-// ---------- install as an app ----------
-(() => {
-  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const embedded = window.top !== window.self;
-  let prompt = null;
-  const show = on => { $('installGroup').hidden = !on || standalone || embedded; };
-  const SHARE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
-  addEventListener('beforeinstallprompt', e => { e.preventDefault(); prompt = e; show(true); });
-  addEventListener('appinstalled', () => { prompt = null; show(false); toast('Игра установлена! Ищите лисичку на экране'); });
-  if (ios) show(true);
-  $('installGo').onclick = async () => {
-    if (prompt){ prompt.prompt(); const r = await prompt.userChoice.catch(() => null); if (r?.outcome === 'accepted') show(false); prompt = null; return; }
-    $('instSteps').innerHTML = ios
-      ? `<li><span class="n">${SHARE}</span><span>Нажмите кнопку <b>«Поделиться»</b> внизу экрана Safari (квадрат со стрелкой вверх).</span></li>
-         <li><span class="n">＋</span><span>Пролистайте меню и выберите <b>«На экран „Домой“»</b>.</span></li>
-         <li><span class="n">✓</span><span>Нажмите <b>«Добавить»</b>. Готово, лисичка на экране!</span></li>`
-      : `<li><span class="n">⋮</span><span>Откройте меню браузера (три точки в углу).</span></li>
-         <li><span class="n">＋</span><span>Выберите <b>«Установить приложение»</b> или <b>«Добавить на главный экран»</b>.</span></li>
-         <li><span class="n">✓</span><span>Подтвердите. Готово, лисичка на экране!</span></li>`;
-    openSheet('sheetInstall');
-  };
-})();
+let statPeriod = store.get('statPeriod', 'month');
 
 // ---------- confetti ----------
 function confetti(n = 140){
