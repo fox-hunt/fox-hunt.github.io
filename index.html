@@ -426,10 +426,6 @@ h1 .peek .pk{animation:peek 5.5s ease-in-out .8s infinite}
 .wonbadge span{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-2)}
 @keyframes badgein{from{opacity:0;transform:translate(-50%,-50%) scale(.5)}}
 
-/* share */
-.sharerow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.sharerow button{height:46px;border-radius:999px;font-weight:600;font-size:15px;background:var(--hair);display:flex;align-items:center;justify-content:center;gap:8px}
-.sharerow svg{width:18px;height:18px}
 /* phones: title on its own line, game mode under the toolbar */
 @media (max-width:600px){
   #sheetWin .body{gap:10px}
@@ -610,10 +606,6 @@ h1 .peek .pk{animation:peek 5.5s ease-in-out .8s infinite}
     <p class="winline" id="wLine"></p>
     <div class="wincount"><span id="wMoves">0</span><small id="wSub">ходов · 0:00</small></div>
     <span class="pb" id="wPB" hidden>Новый личный рекорд!</span>
-    <div class="sharerow">
-      <button id="btnShare"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>Поделиться</button>
-      <button id="btnCard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>Картинка</button>
-    </div>
     <form id="winForm" class="body" style="margin:0">
       <div class="field"><label for="pname">Ваше имя</label><input id="pname" maxlength="24" autocomplete="nickname" placeholder="Например, Ирина" required></div>
       <button class="primary wide" id="btnSave" type="submit">Сохранить результат</button>
@@ -1133,114 +1125,6 @@ function rankOf(rec, list){
   const uniq = [...new Map(list.map(r => [r.at + '|' + r.name, r])).values()];
   return sortRecs(uniq).findIndex(r => r.at === rec.at && r.name === rec.name) + 1;
 }
-
-// ---------- share ----------
-function shareText(){
-  const rows = [];
-  for (let r = 0; r < N; r++){
-    let line = '';
-    for (let c = 0; c < N; c++){ const i = r * N + c; line += !S.opened.includes(i) ? '🌳' : isFox(i) ? '🦊' : '🟩'; }
-    rows.push(line);
-  }
-  const t = tierOf(S.opened.length);
-  return `🦊 Охота на лис · ${LV.name}${S.daily ? ' · Игра дня ' + new Date(S.daily + 'T12:00').toLocaleDateString('ru-RU') : ''}\n`
-    + `Нашёл всех ${FOXES} ${plural(FOXES, 'лису', 'лисы', 'лис')} за ${S.opened.length} ${plural(S.opened.length, 'ход', 'хода', 'ходов')} ⏱ ${fmt(elapsed())}\n`
-    + `«${t.badge}»\n\n${rows.join('\n')}`;
-}
-// share card in the game's own look: light forest, glass board, the real foxes
-const loadImg = src => new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
-const FOX_FILLS = '<style>.fur{fill:#f27a22}.fur2{fill:#d9561a}.crm{fill:#fff4e3}.ink{fill:#2b1a12}.iris{fill:#3fbf6a}.zz text{fill:#0f9d76;font-family:sans-serif;font-weight:800}</style>';
-const foxImg = pose => loadImg('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">${FOX_FILLS}${FOX_BODY}${POSE_EXTRA[pose] || ''}</svg>`
-    .replace(/var\(--ink\)/g, '#2b1a12').replace(pose === 'sleep' ? /<g class="lids">.*?<\/g>|<g class="brow">.*?<\/g>/gs : /$^/, '')));
-async function drawCard(){
-  const W = 1080, H = 1350, c = document.createElement('canvas'), x = c.getContext('2d');
-  c.width = W; c.height = H;
-  const font = '-apple-system, "SF Pro Display", Onest, system-ui, sans-serif', emoji = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
-  // background like the app: mint to peach with soft blobs
-  const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#d6ecdf'); g.addColorStop(1, '#e8eef0'); x.fillStyle = g; x.fillRect(0, 0, W, H);
-  [[120, 120, 520, 'rgba(159,216,184,.9)'], [1000, 620, 520, 'rgba(255,199,154,.7)'], [150, 1250, 560, 'rgba(169,207,232,.75)']].forEach(([cx, cy, r, col]) => {
-    const rg = x.createRadialGradient(cx, cy, 0, cx, cy, r); rg.addColorStop(0, col); rg.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = rg; x.fillRect(0, 0, W, H); });
-  const ink = '#0f2a22', ink2 = 'rgba(15,42,34,.62)';
-  // header
-  x.textBaseline = 'alphabetic'; x.textAlign = 'left';
-  x.fillStyle = ink2; x.font = `600 30px ${font}`; x.fillText('ЛОГИЧЕСКАЯ ИГРА · 1985–2026', 80, 104);
-  x.fillStyle = ink; x.font = `800 86px ${font}`; x.fillText('Охота на лис', 74, 192);
-  const icon = await loadImg('icons/icon-512.png');
-  if (icon){ x.save(); roundRect(x, W - 80 - 132, 62, 132, 132, 30); x.clip(); x.drawImage(icon, W - 80 - 132, 62, 132, 132); x.restore(); }
-  // result row
-  const m = S.opened.length, t = tierOf(m);
-  x.font = `800 168px ${font}`;
-  const ng = x.createLinearGradient(80, 230, 80, 360); ng.addColorStop(0, '#ff8a2a'); ng.addColorStop(1, '#ff4d2e'); x.fillStyle = ng;
-  x.fillText(String(m), 76, 362);
-  const mw = x.measureText(String(m)).width;
-  x.fillStyle = ink; x.font = `700 46px ${font}`; x.fillText(plural(m, 'ход', 'хода', 'ходов'), 104 + mw, 292);
-  x.fillStyle = ink2; x.font = `600 40px ${font}`; x.fillText(`⏱ ${fmt(elapsed())} · ${LV.name}`, 104 + mw, 348);
-  x.font = `800 30px ${font}`; const bt = t.badge.toUpperCase(), bw = x.measureText(bt).width + 56;
-  const bg = x.createLinearGradient(0, 380, 0, 440); bg.addColorStop(0, '#ff8a2a'); bg.addColorStop(1, '#ff4d2e');
-  x.fillStyle = bg; roundRect(x, 80, 390, bw, 58, 29); x.fill(); x.fillStyle = '#fff'; x.fillText(bt, 108, 430);
-  if (S.daily){ x.fillStyle = ink2; x.font = `600 30px ${font}`; x.fillText('📅 Игра дня · ' + new Date(S.daily + 'T12:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }), 104 + bw, 430); }
-  // glass board
-  const px = 80, py = 480, ps = 760, pad = 24;
-  x.save(); x.shadowColor = 'rgba(20,60,45,.18)'; x.shadowBlur = 50; x.shadowOffsetY = 18;
-  x.fillStyle = 'rgba(255,255,255,.5)'; roundRect(x, px + (W - 2 * px - ps) / 2, py, ps, ps, 44); x.fill(); x.restore();
-  x.strokeStyle = 'rgba(255,255,255,.95)'; x.lineWidth = 2; roundRect(x, px + (W - 2 * px - ps) / 2, py, ps, ps, 44); x.stroke();
-  const gx = px + (W - 2 * px - ps) / 2 + pad, gy = py + pad, gs = ps - 2 * pad, gap = N > 10 ? 6 : 8, cs = (gs - gap * (N - 1)) / N;
-  const poses = [...new Set(S.foxes.map(poseOf))], foxes = {};
-  for (const p of poses) foxes[p] = await foxImg(p);
-  const numCol = ['rgba(15,42,34,.32)', '#0f9d76', '#2f7fd8', '#c98a00', '#e5562a', '#c0267a'];
-  x.textAlign = 'center'; x.textBaseline = 'middle';
-  for (let i = 0; i < N * N; i++){
-    const X0 = gx + (i % N) * (cs + gap), Y0 = gy + (i / N | 0) * (cs + gap), open = S.opened.includes(i), fox = open && isFox(i);
-    if (fox){
-      const fg = x.createRadialGradient(X0 + cs / 2, Y0 + cs * .35, 2, X0 + cs / 2, Y0 + cs / 2, cs * .75); fg.addColorStop(0, '#fff1df'); fg.addColorStop(1, '#ffd9b3');
-      x.fillStyle = fg; roundRect(x, X0, Y0, cs, cs, cs * .24); x.fill();
-      x.strokeStyle = '#ff7a1a'; x.lineWidth = 3; roundRect(x, X0 + 1.5, Y0 + 1.5, cs - 3, cs - 3, cs * .24); x.stroke();
-      const im = foxes[poseOf(i)]; if (im) x.drawImage(im, X0 + cs * .04, Y0 + cs * .04, cs * .92, cs * .92);
-    } else if (open){
-      x.fillStyle = 'rgba(15,42,34,.07)'; roundRect(x, X0, Y0, cs, cs, cs * .24); x.fill();
-      x.fillStyle = numCol[Math.min(5, count(i))]; x.font = `800 ${cs * .5}px ${font}`; x.fillText(String(count(i)), X0 + cs / 2, Y0 + cs / 2 + cs * .03);
-    } else {
-      const tg = x.createLinearGradient(X0, Y0, X0 + cs, Y0 + cs); tg.addColorStop(0, 'rgba(255,255,255,.98)'); tg.addColorStop(1, 'rgba(255,255,255,.62)');
-      x.fillStyle = tg; roundRect(x, X0, Y0, cs, cs, cs * .24); x.fill();
-      x.font = `${cs * .6}px ${emoji}`; x.fillText('🌳', X0 + cs / 2, Y0 + cs / 2 + cs * .04);
-    }
-  }
-  // footer: where to play
-  x.textAlign = 'center'; x.textBaseline = 'alphabetic';
-  x.fillStyle = ink; x.font = `700 38px ${font}`; x.fillText('Сыграй и ты: fox-hunt.github.io', W / 2, 1306);
-  return c;
-}
-function roundRect(x, X, Y, w, h, r){ x.beginPath(); x.moveTo(X + r, Y); x.arcTo(X + w, Y, X + w, Y + h, r); x.arcTo(X + w, Y + h, X, Y + h, r); x.arcTo(X, Y + h, X, Y, r); x.arcTo(X, Y, X + w, Y, r); x.closePath(); }
-$('btnShare').onclick = async () => {
-  const text = shareText();
-  try {
-    if (navigator.share){
-      const card = await drawCard(), blob = await new Promise(r => card.toBlob(r, 'image/png'));
-      const file = blob && new File([blob], 'ohota-na-lis.png', { type: 'image/png' });
-      if (file && navigator.canShare?.({ files: [file] })) await navigator.share({ text, files: [file] });
-      else await navigator.share({ text });
-      return;
-    }
-  } catch (err) { if (err?.name === 'AbortError') return; }
-  try { await navigator.clipboard.writeText(text); toast('Результат скопирован. Вставьте его в мессенджер'); }
-  catch { toast('Не получилось скопировать. Попробуйте кнопку «Картинка»'); }
-};
-$('btnCard').onclick = () => {
-  drawCard().then(card => card.toBlob(async blob => {
-    if (!blob) return toast('Не получилось сделать картинку');
-    // inside claude.ai the page can't download directly; the downloads capability asks the viewer instead
-    const dl = window.claude?.use ? await window.claude.use('downloads').catch(() => null) : null;
-    if (dl){
-      try { await dl.save({ filename: 'ohota-na-lis.png', data: blob }); toast('Картинка сохранена'); }
-      catch (err) { if (err?.code !== 'declined') toast('Не получилось сохранить картинку'); }
-      return;
-    }
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'ohota-na-lis.png';
-    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    toast('Картинка сохранена в «Загрузки»');
-  }, 'image/png'));
-};
 
 // ---------- records ----------
 let recPane = 'rec', db = null, globalRecs = [], recTab = 'all', recLevel = 'classic', dbState = 'loading', isOwner = false, recMode = 'idle', picked = new Set();
