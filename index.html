@@ -426,6 +426,34 @@ html.calm *,html.calm *::before,html.calm *::after{animation:none!important;tran
 .wonbadge span{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-2)}
 @keyframes badgein{from{opacity:0;transform:translate(-50%,-50%) scale(.5)}}
 
+/* accounts & shared leaderboards */
+.ava2{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;flex:none;font-weight:800;font-size:16px;color:#fff;background:linear-gradient(150deg,var(--fox),var(--fox-2))}
+.row .chev{color:var(--fg-3);font-size:22px;flex:none}
+.authbtn{width:100%;height:54px;border-radius:16px;display:flex;align-items:center;justify-content:center;gap:10px;font-weight:700;font-size:16px;background:var(--tile);box-shadow:inset 0 0 0 1px var(--hair)}
+.authbtn .lg{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;font-weight:900;font-size:15px;color:#fff;flex:none}
+.or{display:flex;align-items:center;gap:10px;color:var(--fg-3);font-size:13px}.or::before,.or::after{content:"";flex:1;height:1px;background:var(--hair)}
+.hintline{font-size:13px;line-height:1.4;color:var(--fg-3);margin:-4px 0 0;padding-left:4px}
+.hintline.ok{color:var(--accent)}.hintline.bad{color:#e5484d}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{height:34px;padding:0 12px;border-radius:999px;background:var(--tile);box-shadow:inset 0 0 0 1px var(--hair);font-size:14px;font-weight:600}
+.codebox{display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:var(--r-md);background:var(--tile)}
+.codebox b{flex:1;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:22px;letter-spacing:.08em}
+.codebox button{height:36px;padding:0 14px;border-radius:999px;background:var(--hair);font-weight:700;font-size:14px}
+.demo-note{font-size:12.5px;line-height:1.45;color:var(--fg-3);text-align:center;margin:0}
+.linkbtn{align-self:center;font-weight:700;font-size:14px;color:var(--accent);padding:4px 8px}
+.danger-row b{color:#e5484d}
+#meRow{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--r-md);background:color-mix(in srgb,var(--accent) 12%,var(--tile));box-shadow:0 0 0 2px var(--accent) inset}
+#meRow .pl{font-family:var(--font-num);font-weight:800;font-size:15px;min-width:34px;text-align:center}
+#meRow .nm{flex:1;min-width:0;font-weight:700}
+#meRow .nm span{display:block;font-size:12px;font-weight:500;color:var(--fg-2)}
+#meRow .mv{font-family:var(--font-num);font-weight:800;font-size:20px}
+#meRow.cta{justify-content:space-between;box-shadow:inset 0 0 0 1px var(--hair);background:var(--tile)}
+#meRow.cta button{height:38px;padding:0 16px;border-radius:999px;font-weight:700;font-size:14px;background:linear-gradient(150deg,var(--fox),var(--fox-2));color:#fff;flex:none}
+.addfriend{display:flex;gap:8px}
+.addfriend input{flex:1;min-width:0;height:44px;border-radius:12px;border:1px solid var(--hair);background:var(--tile);color:var(--fg);padding:0 12px;font:inherit;font-size:16px;text-transform:uppercase}
+.addfriend button{height:44px;padding:0 16px;border-radius:12px;font-weight:700;background:var(--accent);color:var(--accent-ink)}
+.seg.mini#perSegR{align-self:flex-start}
+
 /* phones: title on its own line, game mode under the toolbar */
 @media (max-width:600px){
   #sheetWin .body{gap:10px}
@@ -549,11 +577,21 @@ html.calm *,html.calm *::before,html.calm *::after{animation:none!important;tran
   </div>
 </section>
 
+<section class="sheet glass" id="sheetAccount" role="dialog" aria-modal="true" aria-labelledby="accT" hidden>
+  <div class="grab"></div>
+  <div class="shead"><div><h2 id="accT">Аккаунт</h2><p class="sub" id="accSub"></p></div>
+    <button class="x" data-close aria-label="Закрыть"><svg viewBox="0 0 14 14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M2 2l10 10M12 2 2 12"/></svg></button></div>
+  <div class="body" id="accBody"></div>
+</section>
+
 <section class="sheet glass" id="sheetSettings" role="dialog" aria-modal="true" aria-labelledby="setT" hidden>
   <div class="grab"></div>
   <div class="shead"><div><h2 id="setT">Настройки</h2></div>
     <button class="x" data-close aria-label="Закрыть"><svg viewBox="0 0 14 14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M2 2l10 10M12 2 2 12"/></svg></button></div>
   <div class="body">
+    <div class="sect">Аккаунт</div>
+    <div class="group" id="accGroup"></div>
+
     <div class="sect">Сложность</div>
     <div class="group" id="levelGroup" role="radiogroup" aria-label="Сложность"></div>
     <p class="setnote">При смене уровня начнётся новая игра.</p>
@@ -584,9 +622,11 @@ html.calm *,html.calm *::before,html.calm *::after{animation:none!important;tran
     <div class="seg tabs" id="tabSeg" style="--k:2"><i class="pill"></i><button data-v="rec">Рекорды</button><button data-v="stats">Статистика</button></div>
     <div class="seg" id="lvlSeg" style="--k:3"><i class="pill"></i><button data-v="kid">Лисёнок</button><button data-v="classic">Классика</button><button data-v="pro">Профи</button></div>
     <div class="pane" id="paneRec">
-      <div class="seg" id="seg" style="--k:2"><i class="pill"></i><button data-v="all">Все игроки</button><button data-v="mine">Мои игры</button></div>
+      <div class="seg" id="seg" style="--k:4"><i class="pill"></i><button data-v="mine">Мои</button><button data-v="friends">Друзья</button><button data-v="all">Все</button><button data-v="daily">Игра дня</button></div>
+      <div class="seg mini" id="perSegR" style="--k:2" hidden><i class="pill"></i><button data-v="week">Неделя</button><button data-v="all">Всё время</button></div>
       <div class="board-list" id="recList"></div>
       <div class="dots" id="recDots"></div>
+      <div id="meRow" hidden></div>
       <p class="note" id="recNote"></p>
       <div class="clear" id="clearBox"></div>
     </div>
@@ -612,6 +652,7 @@ html.calm *,html.calm *::before,html.calm *::after{animation:none!important;tran
       <button class="primary wide" id="btnSave" type="submit">Сохранить результат</button>
     </form>
     <p class="saved" id="savedMsg" hidden></p>
+    <button class="linkbtn" id="winSignIn" hidden>Войти, чтобы соревноваться с другими →</button>
     <button class="ghost" id="btnAgain">Сыграть ещё</button>
   </div>
 </section>
@@ -941,11 +982,14 @@ function newGame(){
 
 // ---------- sheets ----------
 const scrim = $('scrim');
+let sheetOpen = null;
 function openSheet(id){
-  closeSheets(true);
-  const s = $(id); s.hidden = false; requestAnimationFrame(() => requestAnimationFrame(() => { s.classList.add('show'); scrim.classList.add('show'); }));
+  closeSheets(true); sheetOpen = id;
+  const s = $(id), go = () => { if (sheetOpen !== id) return; s.classList.add('show'); scrim.classList.add('show'); };
+  s.hidden = false; requestAnimationFrame(() => requestAnimationFrame(go)); setTimeout(go, 80);   // the timer covers browsers that skip frames
 }
 function closeSheets(instant){
+  sheetOpen = null;
   document.querySelectorAll('.sheet.show').forEach(s => { s.classList.remove('show'); setTimeout(() => { if (!s.classList.contains('show')) s.hidden = true; }, instant ? 0 : 500); });
   scrim.classList.remove('show');
 }
@@ -973,6 +1017,7 @@ function applyTheme(){
   if (SET.theme === 'auto') r.removeAttribute('data-theme'); else r.dataset.theme = SET.theme;
 }
 function renderSettings(){
+  renderAccountRow();
   $('levelGroup').innerHTML = Object.entries(LEVELS).map(([k, l]) =>
     `<button class="row radio" role="radio" aria-checked="${SET.level === k}" data-level="${k}"><span class="ri">${l.icon}</span><span class="rt"><b>${l.name}</b><span>${l.desc}</span></span><i class="mark"></i></button>`).join('');
   $('optDaily').setAttribute('aria-checked', String(SET.daily));
@@ -1095,7 +1140,10 @@ function win(){
   $('wMoves').textContent = moves;
   $('wSub').textContent = `${plural(moves, 'ход', 'хода', 'ходов')} · ${fmt(ms)} · ${LV.name}`;
   $('pname').value = store.get('name', '');
-  $('winForm').hidden = S.saved; $('savedMsg').hidden = !S.saved;
+  const acc = SRV.me(), signed = !!(acc && acc.nick);
+  $('winForm').hidden = S.saved || signed; $('savedMsg').hidden = !S.saved && !signed;
+  $('winSignIn').hidden = signed;
+  if (signed && !S.saved){ $('savedMsg').textContent = 'Отправляем результат…'; saveResult(acc.nick); }
   $('sheetWin').querySelector('.trophy').innerHTML = foxSVG(SET.poses ? pick(POSES) : 'base');
   openSheet('sheetWin'); sfx('win'); confetti(ti <= 1 ? 320 : ti <= 2 ? 200 : 140);
   if (S.awarded) return;
@@ -1113,21 +1161,177 @@ function win(){
   if (stats.wins >= 10) unlock('marathon');
 }
 $('btnAgain').onclick = () => newGame();
-$('winForm').addEventListener('submit', async e => {
+
+// ---------- online: accounts & shared leaderboards ----------
+// The game talks to the server only through SRV. Today SRV is a demo server kept in this browser
+// (with made-up rivals); a real backend (Supabase) will implement the same methods.
+const SRV = (() => {
+  const KEY = 'demo.srv', wait = v => new Promise(r => setTimeout(() => r(v), 120));
+  const ADJ = ['Рыжий', 'Хитрый', 'Быстрый', 'Лесной', 'Ночной', 'Тихий', 'Меткий', 'Зоркий', 'Смелый', 'Весёлый', 'Ловкий', 'Северный'];
+  const NOUN = ['Лис', 'Следопыт', 'Охотник', 'Ёж', 'Барсук', 'Филин', 'Енот', 'Бобр', 'Волк', 'Пеленгатор', 'Лесник', 'Заяц'];
+  const MEAN = { kid: [12, 3.5, 4], classic: [19, 4.5, 6], pro: [31, 7, 9] };
+  const code = () => 'LIS-' + Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.random() * 32 | 0]).join('');
+  const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 1.6;
+  let db = store.get(KEY, null);
+  if (!db){
+    db = { users: {}, results: [] };
+    const now = Date.now(), today = todayKey();
+    for (let k = 0; k < 240; k++){
+      const uid = 'bot' + k, nick = `${ADJ[k % ADJ.length]}${NOUN[(k * 7) % NOUN.length]}${k > 140 ? '_' + (k % 97) : ''}`;
+      db.users[uid] = { nick, public: true, code: code(), friends: [], bot: true };
+      for (const lv of ['kid', 'classic', 'pro']){
+        const [m, sd, min] = MEAN[lv], skill = gauss() * .6;
+        for (let g = 0, n = 1 + (Math.random() * 6 | 0); g < n; g++){
+          const moves = Math.max(min, Math.round(m + (gauss() + skill) * sd)), at = now - Math.random() * 60 * 864e5;
+          db.results.push({ uid, level: lv, moves, ms: moves * (3500 + Math.random() * 3500) | 0, at, daily: '' });
+        }
+        if (Math.random() < .35){ const moves = Math.max(min, Math.round(m + (gauss() + skill) * sd)); db.results.push({ uid, level: lv, moves, ms: moves * 4500 | 0, at: now - Math.random() * 6 * 36e5, daily: today }); }
+      }
+    }
+    store.set(KEY, db);
+  }
+  const save = () => store.set(KEY, db);
+  const meId = () => store.get('acc.uid', null);
+  return {
+    demo: true,
+    me(){ const id = meId(); return id && db.users[id] ? { id, ...db.users[id] } : null; },
+    async signIn(provider, email){
+      const key = provider === 'email' ? 'email:' + email.toLowerCase() : provider + ':demo';
+      let id = Object.keys(db.users).find(u => db.users[u].key === key);
+      if (!id){ id = 'u' + Date.now().toString(36); db.users[id] = { key, provider, email: email || '', nick: null, public: true, code: code(), friends: [] }; save(); }
+      store.set('acc.uid', id); return wait(this.me());
+    },
+    async signOut(){ store.set('acc.uid', null); return wait(true); },
+    async deleteAccount(){ const id = meId(); if (!id) return; delete db.users[id]; db.results = db.results.filter(r => r.uid !== id); save(); store.set('acc.uid', null); return wait(true); },
+    async nickFree(nick){ const n = nick.toLowerCase(), id = meId(); return wait(!Object.entries(db.users).some(([u, v]) => u !== id && (v.nick || '').toLowerCase() === n)); },
+    async setNick(nick){ const id = meId(); if (!(await this.nickFree(nick))) throw new Error('taken'); db.users[id].nick = nick; save(); return wait(true); },
+    async setPublic(on){ db.users[meId()].public = !!on; save(); return wait(true); },
+    async addFriend(c){
+      const id = meId(), f = Object.keys(db.users).find(u => db.users[u].code === c.trim().toUpperCase());
+      if (!f) throw new Error('notfound'); if (f === id) throw new Error('self');
+      const me = db.users[id]; if (!me.friends.includes(f)) me.friends.push(f); save(); return wait(db.users[f].nick);
+    },
+    async removeFriend(f){ const me = db.users[meId()]; me.friends = me.friends.filter(x => x !== f); save(); return wait(true); },
+    sampleCode(){ return db.users.bot3.code; },
+    async submit(r){ const id = meId(); if (!id) return; db.results.push({ uid: id, ...r }); save(); return wait(true); },
+    // best result per player, ranked: fewer moves first, then faster
+    async board({ level, scope, period }){
+      const id = meId(), me = id && db.users[id], now = Date.now(), today = todayKey();
+      const allow = scope === 'friends' ? new Set([...(me?.friends || []), id]) : null;
+      const best = new Map();
+      for (const r of db.results){
+        if (r.level !== level) continue;
+        if (scope === 'daily' ? r.daily !== today : period === 'week' && r.at < now - 7 * 864e5) continue;
+        const u = db.users[r.uid]; if (!u || !u.nick || (!u.public && r.uid !== id) || (allow && !allow.has(r.uid))) continue;
+        const b = best.get(r.uid); if (!b || r.moves < b.moves || (r.moves === b.moves && r.ms < b.ms)) best.set(r.uid, r);
+      }
+      const rows = [...best.values()].sort((a, b) => a.moves - b.moves || a.ms - b.ms || a.at - b.at)
+        .map((r, k) => ({ rank: k + 1, uid: r.uid, nick: db.users[r.uid].nick, moves: r.moves, ms: r.ms, at: r.at, me: r.uid === id }));
+      return wait({ total: rows.length, rows: rows.slice(0, 50), mine: rows.find(r => r.me) || null });
+    },
+  };
+})();
+
+const NICK_RE = /^[A-Za-zА-Яа-яЁё0-9_\-]{3,16}$/, BAD = ['хуй', 'пизд', 'еба', 'бля', 'fuck', 'shit'];
+const nickProblem = n => !NICK_RE.test(n) ? 'От 3 до 16 символов: буквы, цифры, «_» и «-»' : BAD.some(b => n.toLowerCase().includes(b)) ? 'Такой ник нельзя, выберите другой' : '';
+const suggestNicks = () => { const a = ['Рыжий', 'Хитрый', 'Зоркий', 'Лесной', 'Меткий'], b = ['Лис', 'Следопыт', 'Охотник', 'Филин', 'Ёж']; return [0, 1, 2].map(() => pick(a) + pick(b) + (10 + Math.random() * 89 | 0)); };
+
+let accStep = 'start', accEmail = '', accConfirmDel = false;
+function openAccount(){ const me = SRV.me(); accStep = !me ? 'start' : !me.nick ? 'nick' : 'manage'; accConfirmDel = false; renderAccount(); openSheet('sheetAccount'); }
+function renderAccount(){
+  const me = SRV.me(), b = $('accBody'), demo = SRV.demo ? '<p class="demo-note">Демо-режим: вход без письма и пароля, соперники в таблицах ненастоящие. Всё хранится только в этом браузере.</p>' : '';
+  if (accStep === 'start'){
+    $('accT').textContent = 'Вход'; $('accSub').textContent = 'Ваши рекорды попадут в общую таблицу. Другие игроки увидят только ваш ник, почту не увидит никто.';
+    b.innerHTML = `<button class="authbtn" data-p="google"><span class="lg" style="background:#4285f4">G</span>Войти через Google</button>
+      <button class="authbtn" data-p="yandex"><span class="lg" style="background:#fc3f1d">Я</span>Войти через Яндекс ID</button>
+      <div class="or">или по почте</div>
+      <form class="body" id="emailForm" style="margin:0;gap:8px"><div class="field"><input id="accEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" required></div>
+      <button class="primary wide" type="submit">Получить ссылку для входа</button></form>${demo}`;
+  } else if (accStep === 'nick'){
+    const sug = suggestNicks();
+    $('accT').textContent = 'Ваш ник'; $('accSub').textContent = 'Так вас увидят в таблицах рекордов. Его можно поменять потом.';
+    b.innerHTML = `<form class="body" id="nickForm" style="margin:0;gap:10px"><div class="field"><input id="accNick" maxlength="16" autocomplete="nickname" placeholder="Например, ${sug[0]}" value="${esc(me?.nick || '')}" required></div>
+      <p class="hintline" id="nickHint">От 3 до 16 символов: буквы, цифры, «_» и «-»</p>
+      <div class="chips">${sug.map(n => `<button type="button" data-n="${n}">${n}</button>`).join('')}</div>
+      <button class="primary wide" type="submit" id="nickSave">Готово</button></form>`;
+    setTimeout(() => $('accNick')?.focus(), 350);
+  } else {
+    $('accT').textContent = 'Аккаунт'; $('accSub').textContent = me.email ? 'Вход по почте ' + me.email.replace(/^(.).*(@.*)$/, '$1•••$2') : 'Вход через ' + (me.provider === 'google' ? 'Google' : 'Яндекс ID');
+    b.innerHTML = `<div class="group">
+        <button class="row" data-a="nick"><span class="ava2">${esc(me.nick[0].toUpperCase())}</span><span class="rt"><b>${esc(me.nick)}</b><span>Изменить ник</span></span><span class="chev">›</span></button>
+        <button class="row" role="switch" data-a="public" aria-checked="${me.public}"><span class="ri">🏆</span><span class="rt"><b>Показывать мои рекорды другим</b><span>${me.public ? 'Вы есть в общих таблицах' : 'Вас видите только вы'}</span></span><i class="switch"></i></button>
+      </div>
+      <div class="sect">Код для друзей</div>
+      <div class="codebox"><b>${me.code}</b><button data-a="copy">Скопировать</button></div>
+      <p class="hintline">Друг вводит этот код во вкладке «🏆 → Друзья», и вы видите результаты друг друга.</p>
+      <div class="group">
+        <button class="row" data-a="out"><span class="ri">↩︎</span><span class="rt"><b>Выйти</b></span></button>
+        ${accConfirmDel ? `<div class="row danger-row" style="flex-wrap:wrap"><span class="rt"><b>Удалить аккаунт?</b><span>Ник и результаты в общих таблицах исчезнут. Рекорды на этом устройстве останутся.</span></span>
+          <div class="clear" style="width:100%"><button class="danger" data-a="del2">Удалить</button><button data-a="nodel">Отмена</button></div></div>`
+        : '<button class="row danger-row" data-a="del"><span class="ri">🗑</span><span class="rt"><b>Удалить аккаунт</b></span></button>'}
+      </div>${demo}`;
+  }
+}
+$('accBody').addEventListener('click', async e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.p){ await SRV.signIn(t.dataset.p); accStep = SRV.me().nick ? 'manage' : 'nick'; renderAccount(); renderSettings(); return; }
+  if (t.dataset.n){ $('accNick').value = t.dataset.n; $('accNick').dispatchEvent(new Event('input')); return; }
+  const a = t.dataset.a, me = SRV.me();
+  if (a === 'nick'){ accStep = 'nick'; renderAccount(); }
+  if (a === 'public'){ await SRV.setPublic(!me.public); renderAccount(); renderSettings(); toast(!me.public ? 'Ваши рекорды видны всем' : 'Ваши рекорды скрыты'); }
+  if (a === 'copy'){ try { await navigator.clipboard.writeText(me.code); toast('Код скопирован'); } catch { toast('Код: ' + me.code); } }
+  if (a === 'out'){ await SRV.signOut(); closeSheets(); renderSettings(); toast('Вы вышли из аккаунта'); }
+  if (a === 'del'){ accConfirmDel = true; renderAccount(); }
+  if (a === 'nodel'){ accConfirmDel = false; renderAccount(); }
+  if (a === 'del2'){ await SRV.deleteAccount(); closeSheets(); renderSettings(); toast('Аккаунт удалён'); }
+});
+let nickT = 0;
+$('accBody').addEventListener('input', e => {
+  if (e.target.id !== 'accNick') return;
+  const n = e.target.value.trim(), h = $('nickHint'), bad = nickProblem(n);
+  h.className = 'hintline' + (bad ? ' bad' : ''); h.textContent = bad || 'Проверяем…';
+  clearTimeout(nickT); if (bad) return;
+  nickT = setTimeout(async () => { const free = await SRV.nickFree(n); if ($('accNick')?.value.trim() !== n) return; h.className = 'hintline ' + (free ? 'ok' : 'bad'); h.textContent = free ? '✓ Ник свободен' : 'Этот ник уже занят'; }, 250);
+});
+$('accBody').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (e.target.id === 'emailForm'){ accEmail = $('accEmail').value.trim(); await SRV.signIn('email', accEmail); toast(SRV.demo ? 'Демо: вход выполнен сразу' : 'Письмо со ссылкой отправлено'); accStep = SRV.me().nick ? 'manage' : 'nick'; renderAccount(); renderSettings(); }
+  if (e.target.id === 'nickForm'){
+    const n = $('accNick').value.trim(), bad = nickProblem(n); if (bad) return;
+    try { await SRV.setNick(n); } catch { $('nickHint').className = 'hintline bad'; $('nickHint').textContent = 'Этот ник уже занят'; return; }
+    store.set('name', n); accStep = 'manage'; renderAccount(); renderSettings(); toast(`Привет, ${n}! 🦊`);
+    if (S.end && !S.saved) win();
+  }
+});
+function renderAccountRow(){
+  const me = SRV.me();
+  $('accGroup').innerHTML = me && me.nick
+    ? `<button class="row" id="accOpen"><span class="ava2">${esc(me.nick[0].toUpperCase())}</span><span class="rt"><b>${esc(me.nick)}</b><span>${me.public ? 'Участвует в общих таблицах' : 'Рекорды скрыты от других'}</span></span><span class="chev">›</span></button>`
+    : `<button class="row" id="accOpen"><span class="ri">👤</span><span class="rt"><b>Войти</b><span>Общие таблицы рекордов, друзья и ваше место среди всех игроков</span></span><span class="chev">›</span></button>`;
+  $('accOpen').onclick = openAccount;
+}
+$('winSignIn').onclick = openAccount;
+
+// win: signed-in players go straight to the shared table, others save by name on this device
+$('winForm').addEventListener('submit', e => {
   e.preventDefault();
   const name = $('pname').value.trim().slice(0, 24); if (!name) return;
-  store.set('name', name);
+  store.set('name', name); saveResult(name);
+});
+async function saveResult(name){
   const rec = { name, moves: S.opened.length, ms: elapsed(), at: S.end, level: S.level, daily: S.daily || '' };
   const mine = store.get('records', []); mine.push(rec); store.set('records', mine);
   S.saved = true; persist();
-  $('btnSave').disabled = true;
-  let shared = false;
-  if (db){ try { await db.collection('records').add(rec); shared = true; } catch {} }
-  $('btnSave').disabled = false;
   $('winForm').hidden = true; $('savedMsg').hidden = false;
-  const pool = (shared ? globalRecs.concat([rec]) : mine).filter(r => (r.level || 'classic') === S.level);
-  $('savedMsg').textContent = `Результат сохранён · ${rankOf(rec, pool)}-е место${shared ? ' среди всех игроков' : ''}`;
-});
+  const me = SRV.me();
+  if (me && me.nick){
+    await SRV.submit({ level: rec.level, moves: rec.moves, ms: rec.ms, at: rec.at, daily: rec.daily });
+    const b = await SRV.board({ level: S.level, scope: S.daily ? 'daily' : 'all', period: 'all' });
+    $('savedMsg').textContent = me.public && b.mine ? `В общей таблице: ${b.mine.rank}-е место из ${b.total}${S.daily ? ' в игре дня' : ''}` : 'Результат сохранён. Ваши рекорды скрыты от других (это можно поменять в аккаунте).';
+  } else {
+    $('savedMsg').textContent = `Результат сохранён · ${rankOf(rec, mine.filter(r => (r.level || 'classic') === S.level))}-е место среди ваших игр`;
+  }
+}
 function sortRecs(list){ return list.slice().sort((a, b) => a.moves - b.moves || (a.ms || 0) - (b.ms || 0) || a.at - b.at); }
 function rankOf(rec, list){
   const uniq = [...new Map(list.map(r => [r.at + '|' + r.name, r])).values()];
@@ -1135,54 +1339,91 @@ function rankOf(rec, list){
 }
 
 // ---------- records ----------
-let recPane = 'rec', db = null, globalRecs = [], recTab = 'all', recLevel = 'classic', dbState = 'loading', isOwner = false, recMode = 'idle', picked = new Set();
+let recPane = 'rec', recTab = SRV.me()?.nick ? 'all' : 'mine', recPeriod = 'all', recLevel = 'classic', recMode = 'idle', picked = new Set(), boardReq = 0;
 const seg = $('seg');
 seg.addEventListener('click', e => { const v = e.target.closest('button')?.dataset.v; if (!v) return; recTab = v; recMode = 'idle'; picked.clear(); renderRecords(); });
+$('perSegR').addEventListener('click', e => { const v = e.target.closest('button')?.dataset.v; if (!v) return; recPeriod = v; renderRecords(); });
 $('lvlSeg').addEventListener('click', e => { const v = e.target.closest('button')?.dataset.v; if (!v) return; recLevel = v; recMode = 'idle'; picked.clear(); renderRecords(); });
 function esc(s){ const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 const keyOf = r => r.at + '|' + r.name;
 const ofLevel = r => (r.level || 'classic') === recLevel;
+const whenOf = t => { const d = new Date(t); return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) + ', ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); };
+function showPages(rows, emptyHtml){
+  const pages = [];
+  for (let k = 0; k < rows.length; k += 5) pages.push(`<div class="rpage">${rows.slice(k, k + 5).join('')}</div>`);
+  const keepPage = $('recList').dataset.lvl === recLevel + recTab + recPeriod ? $('recList').scrollLeft : 0;
+  $('recList').dataset.lvl = recLevel + recTab + recPeriod;
+  $('recList').innerHTML = pages.length ? pages.join('') : `<div class="empty">${emptyHtml}</div>`;
+  $('recList').scrollLeft = keepPage;
+  $('recDots').innerHTML = pages.length > 1 ? pages.map((_, k) => `<button aria-label="Страница ${k + 1}"></button>`).join('') : '';
+  syncDots();
+}
 function renderRecords(){
   segSet($('tabSeg'), recPane);
   $('paneRec').hidden = recPane !== 'rec'; $('paneStats').hidden = recPane !== 'stats'; $('paneBadges').hidden = recPane !== 'rec';
   if (recPane === 'stats') renderStats();
-  seg.hidden = !db; if (!db) recTab = 'mine';
   segSet(seg, recTab); segSet($('lvlSeg'), recLevel);
+  $('perSegR').hidden = !(recTab === 'all' || recTab === 'friends'); segSet($('perSegR'), recPeriod);
+  renderBadges();
+  if (recTab === 'mine') return renderMine();
+  // shared tables
+  recMode = 'idle'; $('clearBox').innerHTML = ''; $('recList').classList.remove('picking');
+  const me = SRV.me(), signed = !!(me && me.nick), req = ++boardReq;
+  if (recTab === 'friends' && !signed){
+    showPages([], 'Войдите в аккаунт, чтобы соревноваться с друзьями.');
+    $('meRow').className = 'cta'; $('meRow').hidden = false; $('meRow').innerHTML = '<span>Друзья видят результаты друг друга</span><button id="meIn">Войти</button>'; $('meIn').onclick = openAccount;
+    $('recNote').textContent = ''; return;
+  }
+  SRV.board({ level: recLevel, scope: recTab, period: recPeriod }).then(b => {
+    if (req !== boardReq) return;
+    const rows = b.rows.map(r => `<div class="rec${r.rank <= 3 ? ' p' + r.rank : ''}${r.me ? ' me' : ''}">
+      <span class="ck"></span><span class="pl">${r.rank}</span>
+      <span class="nm">${esc(r.nick)}${r.me ? ' (вы)' : ''}<span class="dt">${whenOf(r.at)} · ${fmt(r.ms)}</span></span>
+      <span class="mv">${r.moves}<small>${plural(r.moves, 'ход', 'хода', 'ходов')}</small></span></div>`);
+    const empty = recTab === 'friends'
+      ? `Здесь появятся ваши друзья.<br>Попросите у друга код и введите его ниже.${SRV.demo ? `<br><small>Для пробы: ${SRV.sampleCode()}</small>` : ''}`
+      : recTab === 'daily' ? `Сегодня игру дня на уровне «${LEVELS[recLevel].name}» ещё никто не прошёл.` : 'Пока пусто.';
+    showPages(rows, empty);
+    const mr = $('meRow');
+    if (!signed){ mr.className = 'cta'; mr.hidden = false; mr.innerHTML = '<span>Узнайте своё место среди всех</span><button id="meIn">Войти</button>'; $('meIn').onclick = openAccount; }
+    else if (b.mine && !b.rows.some(r => r.me)){ mr.className = ''; mr.hidden = false; mr.innerHTML = `<span class="pl">${b.mine.rank}</span><span class="nm">Вы · ${esc(me.nick)}<span>${b.mine.rank} место из ${b.total}</span></span><span class="mv">${b.mine.moves}</span>`; }
+    else if (!b.mine && signed){ mr.className = 'cta'; mr.hidden = false; mr.innerHTML = `<span>${me.public ? 'Пройдите уровень, чтобы попасть в таблицу' : 'Ваши рекорды скрыты от других'}</span>`; }
+    else mr.hidden = true;
+    if (recTab === 'friends' && signed){
+      $('clearBox').innerHTML = `<form class="addfriend" id="addFriend" style="width:100%"><input id="friendCode" placeholder="Код друга, LIS-XXXX" maxlength="8" autocomplete="off"><button type="submit">Добавить</button></form>`;
+    }
+    $('recNote').textContent = (recTab === 'daily' ? 'Игра дня: у всех сегодня одна расстановка. ' : `Лучший результат каждого игрока${recPeriod === 'week' ? ' за неделю' : ''}. `) + (SRV.demo ? 'Демо: соперники ненастоящие.' : '');
+  });
+}
+$('clearBox').addEventListener('submit', async e => {
+  if (e.target.id !== 'addFriend') return; e.preventDefault();
+  const c = $('friendCode').value.trim(); if (!c) return;
+  try { const nick = await SRV.addFriend(c); toast(`${nick} теперь ваш друг 🦊`); renderRecords(); }
+  catch (err) { toast(err.message === 'self' ? 'Это ваш собственный код' : 'Игрок с таким кодом не найден'); }
+});
+function renderMine(){
+  $('meRow').hidden = true;
   const mine = store.get('records', []);
-  const list = sortRecs((recTab === 'all' && db ? globalRecs : mine).filter(ofLevel)).slice(0, 50);
-  const myKeys = new Set(mine.map(keyOf));
-  const canEdit = recTab === 'mine' || isOwner;
-  if (!canEdit || !list.length) recMode = 'idle';
+  const list = sortRecs(mine.filter(ofLevel)).slice(0, 50);
+  if (!list.length) recMode = 'idle';
   const picking = recMode !== 'idle' && recMode !== 'confirmAll';
   $('recList').classList.toggle('picking', picking);
   const rows = list.map((r, k) => {
-    const d = new Date(r.at), key = recTab === 'all' && db ? r._id : keyOf(r);
-    const when = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) + ', ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-    return `<div class="rec${k < 3 ? ' p' + (k + 1) : ''}${recTab === 'all' && myKeys.has(keyOf(r)) ? ' me' : ''}${picking && picked.has(key) ? ' on' : ''}" data-key="${esc(String(key))}">
+    const key = keyOf(r);
+    return `<div class="rec${k < 3 ? ' p' + (k + 1) : ''}${picking && picked.has(key) ? ' on' : ''}" data-key="${esc(String(key))}">
       <span class="ck"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.4 5.8 10 11 4"/></svg></span>
       <span class="pl">${k + 1}</span>
-      <span class="nm">${esc(String(r.name || 'Игрок'))}<span class="dt">${when}${r.ms ? ' · ' + fmt(r.ms) : ''}${r.daily ? ' · 📅' : ''}</span></span>
+      <span class="nm">${esc(String(r.name || 'Игрок'))}<span class="dt">${whenOf(r.at)}${r.ms ? ' · ' + fmt(r.ms) : ''}${r.daily ? ' · 📅' : ''}</span></span>
       <span class="mv">${Number(r.moves) || 0}<small>${plural(Number(r.moves) || 0, 'ход', 'хода', 'ходов')}</small></span></div>`;
   });
-  // five results per page; further pages swipe in from the right
-  const pages = [];
-  for (let k = 0; k < rows.length; k += 5) pages.push(`<div class="rpage">${rows.slice(k, k + 5).join('')}</div>`);
-  const keepPage = $('recList').dataset.lvl === recLevel + recTab ? $('recList').scrollLeft : 0;
-  $('recList').dataset.lvl = recLevel + recTab;
-  $('recList').innerHTML = pages.length ? pages.join('') : `<div class="empty">Здесь пока пусто.<br>Пройдите уровень «${LEVELS[recLevel].name}» и сохраните результат.</div>`;
-  $('recList').scrollLeft = keepPage;
-  $('recDots').innerHTML = pages.length > 1 ? pages.map((_, k) => `<button aria-label="Страница ${k + 1}: места ${k * 5 + 1}–${Math.min(rows.length, k * 5 + 5)}"></button>`).join('') : '';
-  syncDots();
-  $('recNote').textContent = recMode === 'select' ? 'Отметьте результаты, которые нужно удалить.' : recTab === 'all'
-    ? (db ? 'Общая таблица: её видят все, кто открывает игру по этой ссылке.' : dbState === 'loading' ? 'Подключаемся к общей таблице…' : 'Общая таблица недоступна. Показаны результаты с этого устройства.')
-    : 'Меньше ходов — выше место, при равных ходах решает время. Результаты хранятся на этом устройстве.';
+  showPages(rows, `Здесь пока пусто.<br>Пройдите уровень «${LEVELS[recLevel].name}» и сохраните результат.`);
+  $('recNote').textContent = recMode === 'select' ? 'Отметьте результаты, которые нужно удалить.' : 'Меньше ходов — выше место, при равных ходах решает время. Результаты хранятся на этом устройстве.';
   const n = picked.size;
-  $('clearBox').innerHTML = !canEdit || !list.length ? ''
+  $('clearBox').innerHTML = !list.length ? ''
     : recMode === 'select' ? `<button class="danger" data-act="askSel"${n ? '' : ' disabled'}>Удалить${n ? ' (' + n + ')' : ''}</button><button data-act="all">Выбрать все</button><button data-act="no">Отмена</button>`
     : recMode === 'confirmSel' ? `<p>Удалить ${n} ${plural(n, 'результат', 'результата', 'результатов')}? Это нельзя отменить.</p><button class="danger" data-act="delSel">Удалить</button><button data-act="back">Отмена</button>`
-    : recMode === 'confirmAll' ? `<p>Удалить все результаты уровня «${LEVELS[recLevel].name}»${recTab === 'mine' ? ' с этого устройства' : ' из общей таблицы'}? Это нельзя отменить.</p><button class="danger" data-act="delAll">Удалить всё</button><button data-act="no">Отмена</button>`
+    : recMode === 'confirmAll' ? `<p>Удалить все результаты уровня «${LEVELS[recLevel].name}» с этого устройства? Это нельзя отменить.</p><button class="danger" data-act="delAll">Удалить всё</button><button data-act="no">Отмена</button>`
     : '<button data-act="select">Выбрать</button><button data-act="askAll">Очистить всё</button>';
-  renderBadges();
 }
 function syncDots(){
   const l = $('recList'), k = Math.round(l.scrollLeft / Math.max(1, l.clientWidth));
@@ -1194,48 +1435,28 @@ $('recDots').addEventListener('click', e => {
   const l = $('recList'); l.scrollTo({ left: [...$('recDots').children].indexOf(b) * l.clientWidth, behavior: 'smooth' });
 });
 $('recList').addEventListener('click', e => {
-  if (recMode !== 'select') return;
+  if (recMode !== 'select' || recTab !== 'mine') return;
   const row = e.target.closest('.rec'); if (!row) return;
   const k = row.dataset.key; picked.has(k) ? picked.delete(k) : picked.add(k);
   renderRecords();
 });
-async function removeRecs(keys){
-  if (recTab === 'mine') store.set('records', store.get('records', []).filter(r => !keys.has(keyOf(r))));
-  else { try { for (const id of keys) await db.collection('records').doc(id).delete(); } catch { toast('Не удалось удалить из общей таблицы'); return; } }
+function removeRecs(keys){
+  store.set('records', store.get('records', []).filter(r => !keys.has(keyOf(r))));
   toast(keys.size === 1 ? 'Результат удалён' : 'Результаты удалены');
 }
-$('clearBox').addEventListener('click', async e => {
+$('clearBox').addEventListener('click', e => {
   const act = e.target.closest('button')?.dataset.act; if (!act) return;
-  const all = () => new Set((recTab === 'all' && db ? globalRecs.filter(ofLevel).map(r => r._id) : store.get('records', []).filter(ofLevel).map(keyOf)));
+  const all = () => new Set(store.get('records', []).filter(ofLevel).map(keyOf));
   if (act === 'select'){ recMode = 'select'; picked.clear(); }
   else if (act === 'all'){ picked = all(); }
   else if (act === 'askSel'){ recMode = 'confirmSel'; }
   else if (act === 'back'){ recMode = 'select'; }
   else if (act === 'askAll'){ recMode = 'confirmAll'; }
-  else if (act === 'delSel'){ await removeRecs(picked); picked.clear(); recMode = 'idle'; }
-  else if (act === 'delAll'){ await removeRecs(all()); picked.clear(); recMode = 'idle'; }
+  else if (act === 'delSel'){ removeRecs(picked); picked.clear(); recMode = 'idle'; }
+  else if (act === 'delAll'){ removeRecs(all()); picked.clear(); recMode = 'idle'; }
   else { recMode = 'idle'; picked.clear(); }
   renderRecords();
 });
-
-// shared leaderboard via the artifact db (absent outside the claude.ai viewer)
-(async () => {
-  try {
-    db = window.claude?.use ? await window.claude.use('db') : null;
-    const user = window.claude?.use ? await window.claude.use('user') : null;
-    try { isOwner = !!(await user?.isOwner()); } catch {}
-    if (db){
-      db.collection('records').orderBy('moves', 'asc').limit(500).onSnapshot(snap => {
-        const docs = snap.docs || snap;
-        globalRecs = (Array.isArray(docs) ? docs : []).map(d => ({ ...(typeof d.data === 'function' ? d.data() : d.data || d), _id: d.id }))
-          .filter(r => r && typeof r.moves === 'number' && r.name);
-        if (!$('sheetRecords').hidden) renderRecords();
-      }, () => {});
-    }
-  } catch { db = null; }
-  dbState = 'done';
-  if (!$('sheetRecords').hidden) renderRecords();
-})();
 
 // ---------- personal statistics ----------
 function dailyStreak(){
