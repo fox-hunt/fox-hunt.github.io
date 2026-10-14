@@ -162,7 +162,8 @@ h1 .peekfox .rise,h1 .peekfox .tail{animation:none}
   background:linear-gradient(150deg,var(--fox),var(--fox-2));color:var(--fox-ink);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 8px 22px -6px var(--fox);transition:transform .25s cubic-bezier(.2,.9,.3,1.4)}
 .primary:active{transform:scale(.94)}
-.primary.wide{width:100%;height:54px;font-size:17px}
+.primary.wide{width:100%;height:54px;font-size:17px;flex:none}
+.sheet .body > *{flex-shrink:0}
 
 /* sheets */
 .scrim{position:fixed;inset:0;z-index:10;background:rgba(0,0,0,.28);opacity:0;pointer-events:none;transition:opacity .35s}
@@ -187,6 +188,8 @@ h1 .peekfox .rise,h1 .peekfox .tail{animation:none}
 .rules .ic{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;background:var(--tile-open);font-family:var(--font-num);font-weight:700}
 .credit{display:flex;flex-direction:column;gap:14px;font-size:15px;color:var(--fg-2);line-height:1.5}
 .credit p{margin:0}
+.credit .dev{display:flex;align-items:center;gap:14px}
+.credit .ava{width:64px;height:64px;border-radius:50%;object-fit:cover;flex:none;box-shadow:0 0 0 2px var(--glass-edge),0 6px 16px -6px var(--glass-shadow)}
 .credit .dev b{color:var(--fg);font-weight:600}
 .credit a{color:var(--accent);text-decoration:none;user-select:all}
 .demo{display:grid;grid-template-columns:repeat(5,26px);gap:3px}
@@ -465,7 +468,7 @@ h1 .peekfox .rise,h1 .peekfox .tail{animation:none}
     </ul>
     <div class="credit">
       <p>По мотивам игры А. Несчётного («Наука и жизнь», № 12, 1985), созданной для калькулятора «Электроника МК-54».</p>
-      <p class="dev">Разработчик: <b>Ирина Мальцева</b><br><a href="mailto:maltsevaie@gmail.com">maltsevaie@gmail.com</a><br>Версия 2.0</p>
+      <div class="dev"><img class="ava" src="icons/author.jpg" alt="Ирина Мальцева" width="64" height="64" onerror="this.remove()"><p>Разработчик: <b>Ирина Мальцева</b><br><a href="mailto:maltsevaie@gmail.com">maltsevaie@gmail.com</a><br>Версия 2.0</p></div>
     </div>
     <button class="primary wide" data-close>Понятно</button>
   </div>

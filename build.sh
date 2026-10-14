@@ -5,6 +5,7 @@ cd "$(dirname "$0")"
 rm -rf docs && mkdir -p docs/icons
 cp assets/icon-180.png assets/icon-192.png assets/icon-512.png assets/icon-maskable-512.png docs/icons/
 cp assets/icon-round.svg docs/icons/favicon.svg
+cp assets/author.jpg docs/icons/author.jpg
 VER=$(date +%Y%m%d%H%M%S)
 {
   cat <<'HEAD'
@@ -54,7 +55,7 @@ JSON
 cat > docs/sw.js <<SW
 // Offline support: always try the network first (fresh version), fall back to the cache offline.
 const CACHE = 'fox-$VER';
-const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icons/favicon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
+const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icons/favicon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/author.jpg'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE))); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k))))); self.clients.claim(); });
 self.addEventListener('fetch', e => {
