@@ -301,7 +301,7 @@ h1 .peek .pk{animation:peek 5.5s ease-in-out .8s infinite}
 #fx{position:fixed;inset:0;z-index:8;pointer-events:none;width:100%;height:100%}
 
 @media (max-width:380px){.toggle span{font-size:14px}.primary{padding:0 16px}}
-@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-duration:.01ms!important;transition-delay:0s!important}}
+html.calm *,html.calm *::before,html.calm *::after{animation:none!important;transition-duration:.01ms!important;transition-delay:0s!important}
 
 /* header extras */
 .modeline{display:flex;gap:6px;flex-wrap:wrap;margin:-4px 0 -2px}
@@ -582,6 +582,7 @@ h1 .peek .pk{animation:peek 5.5s ease-in-out .8s infinite}
       <button class="row" role="switch" id="optDaily" aria-checked="false"><span class="ri">📅</span><span class="rt"><b>Игра дня</b><span>Одна расстановка на весь день, одинаковая у всех. Можно сравнить результат с друзьями.</span></span><i class="switch"></i></button>
       <button class="row" role="switch" id="optPoses" aria-checked="true"><span class="ri">🦊</span><span class="rt"><b>Лисы прячутся по-разному</b><span>Одна спит, другая машет лапой, третья ест яблоко.</span></span><i class="switch"></i></button>
       <div class="poses" id="posePreview" aria-hidden="true"></div>
+      <button class="row" role="switch" id="optMotion" aria-checked="false" hidden><span class="ri">🎆</span><span class="rt"><b>Анимации</b><span>На телефоне включено «Уменьшение движения», поэтому салют и танцы лис выключены. Включите, чтобы видеть их в этой игре.</span></span><i class="switch"></i></button>
       <button class="row" role="switch" id="optSound" aria-checked="true"><span class="ri">🔊</span><span class="rt"><b>Звуки</b><span>Шорох листвы, тявканье лис и фанфары.</span></span><i class="switch"></i></button>
     </div>
 
@@ -672,7 +673,12 @@ const store = {
   get(k, d){ try { const v = localStorage.getItem('foxhunt.'+k); return v == null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v){ try { localStorage.setItem('foxhunt.'+k, JSON.stringify(v)); } catch {} }
 };
-const SET = Object.assign({ level: 'classic', daily: false, theme: 'auto', sound: true, poses: true }, store.get('settings', {}));
+const SET = Object.assign({ level: 'classic', daily: false, theme: 'auto', sound: true, poses: true, motion: false }, store.get('settings', {}));
+// the phone's "Reduce Motion" turns animations off unless the player switched them on for this game
+const sysCalm = matchMedia('(prefers-reduced-motion: reduce)');
+const calm = () => sysCalm.matches && !SET.motion;
+const applyMotion = () => document.documentElement.classList.toggle('calm', calm());
+applyMotion(); sysCalm.addEventListener?.('change', applyMotion);
 const saveSet = () => store.set('settings', SET);
 const plural = (n, one, few, many) => { const m = n % 100, d = n % 10; return d === 1 && m !== 11 ? one : d >= 2 && d <= 4 && (m < 12 || m > 14) ? few : many; };
 
@@ -991,6 +997,7 @@ function renderSettings(){
   $('optDaily').setAttribute('aria-checked', String(SET.daily));
   $('optPoses').setAttribute('aria-checked', String(SET.poses));
   $('optSound').setAttribute('aria-checked', String(SET.sound));
+  $('optMotion').hidden = !sysCalm.matches; $('optMotion').setAttribute('aria-checked', String(SET.motion));
   $('posePreview').hidden = !SET.poses;
   if (!$('posePreview').children.length) $('posePreview').innerHTML = POSES.slice(1).map(p => `<span>${foxSVG(p)}</span>`).join('');
   segSet($('themeSeg'), SET.theme);
@@ -1001,6 +1008,7 @@ $('levelGroup').addEventListener('click', e => {
 });
 $('optDaily').onclick = () => { SET.daily = !SET.daily; saveSet(); renderSettings(); newGame(); toast(SET.daily ? 'Игра дня: у всех сегодня одна расстановка' : 'Обычная игра: лисы прячутся случайно'); };
 $('optPoses').onclick = () => { SET.poses = !SET.poses; saveSet(); renderSettings(); render(false); };
+$('optMotion').onclick = () => { SET.motion = !SET.motion; saveSet(); applyMotion(); renderSettings(); if (SET.motion) toast('Анимации включены 🎆'); };
 $('optSound').onclick = () => { SET.sound = !SET.sound; saveSet(); renderSettings(); if (SET.sound) sfx('fox'); };
 $('themeSeg').addEventListener('click', e => { const v = e.target.closest('button')?.dataset.v; if (!v) return; SET.theme = v; saveSet(); applyTheme(); segSet($('themeSeg'), v); });
 
@@ -1346,7 +1354,7 @@ let statPeriod = store.get('statPeriod', 'month');
 
 // ---------- fireworks over the board ----------
 function fireworks(area){
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (calm()) return;
   const c = $('fx'), x = c.getContext('2d'), dpr = Math.min(devicePixelRatio || 1, 2);
   c.width = innerWidth * dpr; c.height = innerHeight * dpr; x.setTransform(dpr, 0, 0, dpr, 0, 0);
   const cols = ['#ffd257', '#ff7a1a', '#ff4d6d', '#3ee0a8', '#6cb2ff', '#ffffff', '#c58bff'];
@@ -1381,7 +1389,7 @@ function fireworks(area){
 
 // ---------- confetti ----------
 function confetti(n = 140){
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (calm()) return;
   const c = $('confetti'), x = c.getContext('2d'), dpr = devicePixelRatio || 1;
   c.width = innerWidth * dpr; c.height = innerHeight * dpr; x.setTransform(dpr, 0, 0, dpr, 0, 0);
   const cols = ['#ff7a1a', '#ff4d2e', '#ffd257', '#3ee0a8', '#6cb2ff', '#ffffff'];
@@ -1406,7 +1414,7 @@ function start(data){
   if (S.start && !S.end && !S.pauseAt) S.pauseAt = S.lastSeen || Date.now();
   buildBoard(); prevDead = new Set(); render(false);
 }
-{ const sp = $('splash'), hide = () => sp.classList.add('hide'); sp.onclick = hide; setTimeout(hide, matchMedia('(prefers-reduced-motion: reduce)').matches ? 300 : 1900); }
+{ const sp = $('splash'), hide = () => sp.classList.add('hide'); sp.onclick = hide; setTimeout(hide, calm() ? 300 : 1900); }
 window.claude?.hot?.snapshot?.(() => ({ game: S }));
 window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
 })();
