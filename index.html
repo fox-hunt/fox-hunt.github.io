@@ -279,6 +279,7 @@ h1 .peek .pk{animation:peek 5.5s ease-in-out .8s infinite}
 .winline{margin:-4px 0 0;text-align:center;font-size:16px;line-height:1.45;color:var(--fg-2);text-wrap:balance}
 .pb{align-self:center;font-size:14px;font-weight:700;color:var(--accent)}
 #confetti{position:fixed;inset:0;z-index:12;pointer-events:none;width:100%;height:100%}
+#fx{position:fixed;inset:0;z-index:8;pointer-events:none;width:100%;height:100%}
 
 @media (max-width:380px){.toggle span{font-size:14px}.primary{padding:0 16px}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-duration:.01ms!important;transition-delay:0s!important}}
@@ -407,9 +408,8 @@ h1 .peek .pk{animation:peek 5.5s ease-in-out .8s infinite}
 .board.won:not(.cheer) .cell.closed .tree{animation:sway 3s ease-in-out var(--sd,0s) infinite}
 @keyframes sway{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
 .winflash{position:absolute;inset:0;z-index:5;display:grid;place-items:center;pointer-events:none;opacity:0}
-.winflash b{font-size:clamp(44px,13vw,72px);font-weight:900;letter-spacing:-.04em;color:#fff;
-  background:linear-gradient(150deg,#ffd257,var(--fox) 50%,var(--fox-2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
-  filter:drop-shadow(0 6px 18px rgba(0,0,0,.25)) drop-shadow(0 0 2px rgba(255,255,255,.9))}
+.winflash b{font-size:clamp(52px,15vw,78px);font-weight:900;letter-spacing:-.04em;color:#ff7a1a;-webkit-text-stroke:2px #fff;paint-order:stroke fill;
+  text-shadow:0 0 22px rgba(255,190,90,.95),0 0 46px rgba(255,122,26,.6),0 10px 26px rgba(0,0,0,.28)}
 .winflash.go{animation:flash 2.2s cubic-bezier(.2,.9,.3,1.2) both}
 @keyframes flash{0%{opacity:0;transform:scale(.4) rotate(-8deg)}18%{opacity:1;transform:scale(1.08) rotate(2deg)}28%{transform:scale(1)}78%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.25)}}
 
@@ -625,6 +625,7 @@ h1 .peek .pk{animation:peek 5.5s ease-in-out .8s infinite}
 
 <div class="bubble glass" id="bubble" role="status" aria-live="polite"></div>
 <canvas id="confetti" aria-hidden="true"></canvas>
+<canvas id="fx" aria-hidden="true"></canvas>
 <div class="toast glass" id="toast" role="status"></div>
 <div class="ach glass" id="ach" role="status" aria-live="polite"><span class="ai" id="achIcon">🏅</span><span><small>Новый значок</small><b id="achName"></b></span></div>
 
@@ -880,6 +881,7 @@ function celebrate(from){
   board.classList.remove('cheer'); void board.offsetWidth; board.classList.add('cheer');
   setTimeout(() => board.classList.remove('cheer'), far * 70 + 800);
   const f = $('winflash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
+  fireworks($('boardcard').getBoundingClientRect());
   const wb = $('wonbadge'); wb.style.setProperty('--bd', '2s'); wb.hidden = true; void wb.offsetWidth; wb.hidden = false;
 }
 $('wonbadge').onclick = () => win();
@@ -1438,6 +1440,41 @@ function renderStats(){
   chart.addEventListener('pointerleave', () => { tip.classList.remove('show'); chart.querySelectorAll('.dot.on').forEach(b => b.classList.remove('on')); });
 }
 let statPeriod = store.get('statPeriod', 'month');
+
+// ---------- fireworks over the board ----------
+function fireworks(area){
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const c = $('fx'), x = c.getContext('2d'), dpr = Math.min(devicePixelRatio || 1, 2);
+  c.width = innerWidth * dpr; c.height = innerHeight * dpr; x.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const cols = ['#ffd257', '#ff7a1a', '#ff4d6d', '#3ee0a8', '#6cb2ff', '#ffffff', '#c58bff'];
+  const sparks = [], small = innerWidth < 600, size = Math.min(area.width, area.height);
+  for (let b = 0; b < 5; b++){
+    const at = b * 16 + (b ? Math.random() * 8 : 0);
+    const cx = area.left + area.width * (.2 + Math.random() * .6), cy = area.top + area.height * (.18 + Math.random() * .45);
+    const col = cols[b % cols.length], n = small ? 46 : 64, sp = size * (small ? .0105 : .009);
+    for (let k = 0; k < n; k++){
+      const a = k / n * Math.PI * 2 + Math.random() * .2, v = sp * (.55 + Math.random() * .6);
+      sparks.push({ at, x: cx, y: cy, vx: Math.cos(a) * v, vy: Math.sin(a) * v, c: Math.random() < .25 ? '#fff' : col, life: 60 + Math.random() * 25, px: cx, py: cy });
+    }
+  }
+  let t = 0;
+  (function f(){
+    x.globalCompositeOperation = 'source-over';
+    x.clearRect(0, 0, innerWidth, innerHeight);
+    x.globalCompositeOperation = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches) ? 'lighter' : 'source-over';
+    let alive = 0;
+    for (const p of sparks){
+      const age = t - p.at; if (age < 0 || age > p.life){ if (age < 0) alive++; continue; }
+      alive++;
+      p.px = p.x; p.py = p.y; p.vx *= .965; p.vy = p.vy * .965 + .07; p.x += p.vx; p.y += p.vy;
+      const fade = 1 - age / p.life;
+      x.strokeStyle = p.c; x.globalAlpha = fade; x.lineWidth = 2.4 * fade + .6; x.lineCap = 'round';
+      x.beginPath(); x.moveTo(p.px - p.vx * 2.2, p.py - p.vy * 2.2); x.lineTo(p.x, p.y); x.stroke();
+    }
+    x.globalAlpha = 1;
+    if (++t < 200 && alive) requestAnimationFrame(f); else x.clearRect(0, 0, innerWidth, innerHeight);
+  })();
+}
 
 // ---------- confetti ----------
 function confetti(n = 140){
