@@ -560,9 +560,9 @@ html.calm *,html.calm *::before,html.calm *::after{animation:none!important;tran
       <li><span class="ic">🌳</span><span>Под каждым деревом может прятаться лиса.</span></li>
       <li><span class="ic"><span class="demo" style="grid-template-columns:repeat(2,13px);gap:2px"><i class="d" style="width:13px;height:13px;border-radius:4px"></i><i class="d" style="width:13px;height:13px;border-radius:4px"></i></span></span><span>С подсказками: когда цифра «нашла» всех своих лис, она зачёркивается, а все её линии штрихуются. Лис там больше нет, и нажать на эти клетки нельзя.</span></li>
       <li><span class="ic">👆</span><span>Удерживайте открытую цифру, чтобы подсветить её линии.</span></li>
-      <li><span class="ic">🪵</span><span>Свои пометки: удерживайте дерево (на компьютере — правый клик). Первый раз ставится пенёк 🪵 («лисы нет»), второй — ❓ («тут, наверное, лиса»), третий убирает пометку. Пометки не считаются ходами, а клетку с пеньком нельзя открыть случайно.</span></li>
+      <li><span class="ic">🪵</span><span>Свои пометки (включаются в настройках): удерживайте дерево (на компьютере — правый клик). Первый раз ставится пенёк 🪵 («лисы нет»), второй — ❓ («тут, наверное, лиса»), третий убирает пометку. Пометки не считаются ходами, а клетку с пеньком нельзя открыть случайно.</span></li>
       <li><span class="ic">⏸</span><span>Нажмите на время, чтобы поставить игру на паузу. Пока пауза, поле скрыто.</span></li>
-      <li><span class="ic">⚙️</span><span>В настройках: уровень сложности, игра дня, тёмная тема, звуки и позы лис.</span></li>
+      <li><span class="ic">⚙️</span><span>В настройках: уровень сложности, игра дня, пометки, тёмная тема, звуки и позы лис.</span></li>
     </ul>
     <div class="credit">
       <p>По мотивам игры А. Несчётного («Наука и жизнь», № 12, 1985), созданной для калькулятора «Электроника МК-54».</p>
@@ -604,6 +604,7 @@ html.calm *,html.calm *::before,html.calm *::after{animation:none!important;tran
     <div class="sect">Игра</div>
     <div class="group">
       <button class="row" role="switch" id="optDaily" aria-checked="false"><span class="ri">📅</span><span class="rt"><b>Игра дня</b><span>Одна расстановка на весь день, одинаковая у всех. Можно сравнить результат с друзьями.</span></span><i class="switch"></i></button>
+      <button class="row" role="switch" id="optMarks" aria-checked="false"><span class="ri">🪵</span><span class="rt"><b>Пометки на деревьях</b><span>Удерживайте дерево: пенёк 🪵 «лисы нет», ещё раз — ❓ «может быть», ещё раз — снять.</span></span><i class="switch"></i></button>
       <button class="row" role="switch" id="optPoses" aria-checked="true"><span class="ri">🦊</span><span class="rt"><b>Лисы прячутся по-разному</b><span>Одна спит, другая машет лапой, третья ест яблоко.</span></span><i class="switch"></i></button>
       <div class="poses" id="posePreview" aria-hidden="true"></div>
       <button class="row" role="switch" id="optMotion" aria-checked="false" hidden><span class="ri">🎆</span><span class="rt"><b>Анимации</b><span>На телефоне включено «Уменьшение движения», поэтому салют и танцы лис выключены. Включите, чтобы видеть их в этой игре.</span></span><i class="switch"></i></button>
@@ -700,7 +701,7 @@ const store = {
   get(k, d){ try { const v = localStorage.getItem('foxhunt.'+k); return v == null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v){ try { localStorage.setItem('foxhunt.'+k, JSON.stringify(v)); } catch {} }
 };
-const SET = Object.assign({ level: 'classic', daily: false, theme: 'auto', sound: true, poses: true, motion: false }, store.get('settings', {}));
+const SET = Object.assign({ level: 'classic', daily: false, theme: 'auto', sound: true, poses: true, motion: false, marks: false }, store.get('settings', {}));
 // the phone's "Reduce Motion" turns animations off unless the player switched them on for this game
 const sysCalm = matchMedia('(prefers-reduced-motion: reduce)');
 const calm = () => sysCalm.matches && !SET.motion;
@@ -803,7 +804,7 @@ function render(animate = true){
       b.setAttribute('aria-label', `${where}: ${fox ? 'лиса' : n + (done.has(i) ? ', все найдены' : '')}`);
       b.disabled = false;
     } else {
-      const m = isDead ? '' : (S.marks[i] || ''), t = 't' + m;
+      const m = isDead || !SET.marks ? '' : (S.marks[i] || ''), t = 't' + m;
       if (b.dataset.t !== t || b.dataset.n != null){
         b.innerHTML = m === 'no' ? '<span class="tree">🪵</span>' : '<span class="tree">🌳</span>' + (m === 'maybe' ? '<span class="mk">❓</span>' : '');
         b.dataset.t = t; delete b.dataset.n;
@@ -830,7 +831,7 @@ function render(animate = true){
   }
   $('hint').textContent = S.end ? 'Все лисы найдены! Начните новую игру или сохраните результат.'
     : S.opened.length === 0 ? `Нажмите на любую клетку леса. Здесь прячутся ${FOXES} ${plural(FOXES, 'лиса', 'лисы', 'лис')}. Цифра покажет, сколько их на той же горизонтали, вертикали и диагоналях.`
-    : S.hints ? 'Заштрихованные клетки пустые: туда можно не ходить. Удерживайте дерево, чтобы поставить пенёк 🪵 или ❓.'
+    : S.hints ? 'Заштрихованные клетки пустые: туда можно не ходить. ' + (SET.marks ? 'Удерживайте дерево, чтобы поставить пенёк 🪵 или ❓.' : 'Удерживайте цифру, чтобы увидеть её линии.')
     : 'Подсказки выключены: все клетки доступны.';
   const dd = S.daily ? new Date(S.daily + 'T12:00') : null;
   $('lvlChip').textContent = `${LV.icon} ${LV.name} · ${N}×${N}`;
@@ -957,14 +958,14 @@ board.addEventListener('click', e => {
   if (suppressClick){ suppressClick = false; return; }
   const i = +b.dataset.i;
   if (!S.opened.includes(i)){
-    if (S.marks[i] === 'no' && !(S.hints && analyse().dead.has(i))){ buzz(20); sfx('nope'); toast('Тут пенёк 🪵 Сначала снимите пометку'); return; }
+    if (SET.marks && S.marks[i] === 'no' && !(S.hints && analyse().dead.has(i))){ buzz(20); sfx('nope'); toast('Тут пенёк 🪵 Сначала снимите пометку'); return; }
   }
   openCell(i);
 });
 
 // player's own marks on closed cells: 🪵 "no fox" → ❓ "maybe a fox" → none (not a move)
 function cycleMark(i){
-  if (S.end || S.pauseAt || S.opened.includes(i) || (S.hints && analyse().dead.has(i))) return;
+  if (!SET.marks || S.end || S.pauseAt || S.opened.includes(i) || (S.hints && analyse().dead.has(i))) return;
   const m = S.marks[i], next = !m ? 'no' : m === 'no' ? 'maybe' : '';
   if (next) S.marks[i] = next; else delete S.marks[i];
   buzz(6); if (SET.sound) try { tone(next ? 880 : 520, .06, { vol: .05 }); } catch {}
@@ -981,7 +982,7 @@ board.addEventListener('pointerdown', e => {
   const b = e.target.closest('.cell'); if (!b || b.classList.contains('fox')) return;
   const i = +b.dataset.i; clearTimeout(pressT); pressXY = [e.clientX, e.clientY];
   if (b.classList.contains('open')) pressT = setTimeout(() => { trace(i); suppressClick = true; buzz(6); }, 180);
-  else if (e.pointerType !== 'mouse') pressT = setTimeout(() => { suppressClick = true; cycleMark(i); }, 420);
+  else if (SET.marks && e.pointerType !== 'mouse') pressT = setTimeout(() => { suppressClick = true; cycleMark(i); }, 420);
 });
 board.addEventListener('pointermove', e => {
   if (pressXY && Math.hypot(e.clientX - pressXY[0], e.clientY - pressXY[1]) > 10){ clearTimeout(pressT); pressXY = null; }
@@ -1059,6 +1060,7 @@ function renderSettings(){
   $('optDaily').setAttribute('aria-checked', String(SET.daily));
   $('optPoses').setAttribute('aria-checked', String(SET.poses));
   $('optSound').setAttribute('aria-checked', String(SET.sound));
+  $('optMarks').setAttribute('aria-checked', String(SET.marks));
   $('optMotion').hidden = !sysCalm.matches; $('optMotion').setAttribute('aria-checked', String(SET.motion));
   $('posePreview').hidden = !SET.poses;
   if (!$('posePreview').children.length) $('posePreview').innerHTML = POSES.slice(1).map(p => `<span>${foxSVG(p)}</span>`).join('');
@@ -1071,6 +1073,7 @@ $('levelGroup').addEventListener('click', e => {
 $('optDaily').onclick = () => { SET.daily = !SET.daily; saveSet(); renderSettings(); newGame(); toast(SET.daily ? 'Игра дня: у всех сегодня одна расстановка' : 'Обычная игра: лисы прячутся случайно'); };
 $('optPoses').onclick = () => { SET.poses = !SET.poses; saveSet(); renderSettings(); render(false); };
 $('optMotion').onclick = () => { SET.motion = !SET.motion; saveSet(); applyMotion(); renderSettings(); if (SET.motion) toast('Анимации включены 🎆'); };
+$('optMarks').onclick = () => { SET.marks = !SET.marks; saveSet(); renderSettings(); render(false); toast(SET.marks ? 'Пометки включены: удерживайте дерево' : 'Пометки выключены'); };
 $('optSound').onclick = () => { SET.sound = !SET.sound; saveSet(); renderSettings(); if (SET.sound) sfx('fox'); };
 $('themeSeg').addEventListener('click', e => { const v = e.target.closest('button')?.dataset.v; if (!v) return; SET.theme = v; saveSet(); applyTheme(); segSet($('themeSeg'), v); });
 
