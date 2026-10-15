@@ -440,6 +440,7 @@ html.calm *,html.calm *::before,html.calm *::after{animation:none!important;tran
 .avarow .btns{display:flex;gap:8px}
 .avarow .btns button{height:34px;padding:0 14px;border-radius:999px;background:var(--tile);box-shadow:inset 0 0 0 1px var(--hair);font-weight:700;font-size:14px}
 .netstats{display:grid;gap:10px;margin-bottom:14px}
+#clearBox #playDaily{height:52px;border-radius:999px;font-weight:700;font-size:16px;background:linear-gradient(150deg,var(--fox),var(--fox-2));color:var(--fox-ink);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 8px 22px -6px var(--fox);opacity:1}
 .netcta{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border-radius:var(--r-md);background:var(--tile);box-shadow:inset 0 0 0 1px var(--hair);font-weight:600}
 .netcta button{height:38px;padding:0 16px;border-radius:999px;font-weight:700;font-size:14px;background:linear-gradient(150deg,var(--fox),var(--fox-2));color:#fff;flex:none}
 .netstats h3{display:flex;align-items:center;gap:8px;margin:0;font-size:15px}
@@ -616,7 +617,7 @@ html.calm *,html.calm *::before,html.calm *::after{animation:none!important;tran
 
     <div class="sect">Игра</div>
     <div class="group">
-      <button class="row" role="switch" id="optDaily" aria-checked="false"><span class="ri">📅</span><span class="rt"><b>Игра дня</b><span>Одна расстановка на весь день, одинаковая у всех. Можно сравнить результат с друзьями.</span></span><i class="switch"></i></button>
+      <button class="row" role="switch" id="optDaily" aria-checked="false"><span class="ri">📅</span><span class="rt"><b>Игра дня</b><span>Одна расстановка на весь день, одинаковая у всех. Результат попадает в общую таблицу.</span></span><i class="switch"></i></button>
       <button class="row" role="switch" id="optMarks" aria-checked="false"><span class="ri">🪵</span><span class="rt"><b>Пометки на деревьях</b><span><span class="mkHow">Удерживайте дерево</span>: пенёк 🪵 «лисы нет», ещё раз — ❓ «может быть», ещё раз — снять.</span></span><i class="switch"></i></button>
       <button class="row" role="switch" id="optPoses" aria-checked="true"><span class="ri">🦊</span><span class="rt"><b>Лисы прячутся по-разному</b><span>Одна спит, другая машет лапой, третья ест яблоко.</span></span><i class="switch"></i></button>
       <div class="poses" id="posePreview" aria-hidden="true"></div>
@@ -641,7 +642,7 @@ html.calm *,html.calm *::before,html.calm *::after{animation:none!important;tran
     <div class="seg tabs" id="tabSeg" style="--k:2"><i class="pill"></i><button data-v="rec">Рекорды</button><button data-v="stats">Статистика</button></div>
     <div class="seg" id="lvlSeg" style="--k:3"><i class="pill"></i><button data-v="kid">Лисёнок</button><button data-v="classic">Классика</button><button data-v="pro">Профи</button></div>
     <div class="pane" id="paneRec">
-      <div class="seg" id="seg" style="--k:3"><i class="pill"></i><button data-v="mine">Мои</button><button data-v="daily">Игра дня</button><button data-v="friends">Друзья</button></div>
+      <div class="seg" id="seg" style="--k:2"><i class="pill"></i><button data-v="mine">Мои</button><button data-v="daily">Игра дня</button></div>
       <div class="seg mini" id="perSegR" style="--k:2" hidden><i class="pill"></i><button data-v="0">Сегодня</button><button data-v="1">Вчера</button></div>
       <div class="board-list" id="recList"></div>
       <div class="dots" id="recDots"></div>
@@ -1350,12 +1351,8 @@ function renderAccount(){
     b.innerHTML = `${photoBlock(me)}
       <div class="group">
         <button class="row" data-a="nick"><span class="ri">✏️</span><span class="rt"><b>${esc(me.nick)}</b><span>Изменить ник и фото</span></span><span class="chev">›</span></button>
-        <button class="row" role="switch" data-a="public" aria-checked="${me.public}"><span class="ri">🏆</span><span class="rt"><b>Показывать мои рекорды всем</b><span>${me.public ? 'Вы есть в общей таблице' : 'Вас видят только друзья'}</span></span><i class="switch"></i></button>
+        <button class="row" role="switch" data-a="public" aria-checked="${me.public}"><span class="ri">🏆</span><span class="rt"><b>Показывать мои рекорды всем</b><span>${me.public ? 'Вы есть в общей таблице' : 'Другие игроки вас не видят'}</span></span><i class="switch"></i></button>
       </div>
-      <div class="sect">Код для друзей</div>
-      <div class="codebox"><b>${esc(me.code)}</b><button data-a="copy">Скопировать</button></div>
-      <p class="hintline">Друг вводит этот код во вкладке «🏆 → Друзья», и вы видите результаты друг друга.</p>
-      ${fr.length ? `<div class="sect">Друзья · ${fr.length}</div><div class="group">${fr.map(f => `<div class="row">${avaHTML(f.id, f.ava, f.nick)}<span class="rt"><b>${esc(f.nick)}</b></span><button class="frx" data-a="unfriend" data-id="${f.id}" aria-label="Удалить из друзей">✕</button></div>`).join('')}</div>` : ''}
       <div class="group">
         ${accConfirmDel ? `<div class="row danger-row" style="flex-wrap:wrap"><span class="rt"><b>Удалить аккаунт?</b><span>Ник и результаты в общей таблице исчезнут навсегда. Рекорды на этом устройстве останутся.</span></span>
           <div class="clear" style="width:100%"><button class="danger" data-a="del2">Удалить</button><button data-a="nodel">Отмена</button></div></div>`
@@ -1374,7 +1371,7 @@ $('accBody').addEventListener('click', async e => {
   if (a === 'nodel'){ accConfirmDel = false; renderAccount(); }
   accBusy = true;
   try {
-    if (a === 'public'){ await SRV.setPublic(!me.public); renderAccount(); renderSettings(); toast(!me.public ? 'Ваши рекорды видны всем' : 'Ваши рекорды видят только друзья'); }
+    if (a === 'public'){ await SRV.setPublic(!me.public); renderAccount(); renderSettings(); toast(!me.public ? 'Ваши рекорды видны всем' : 'Вы скрыты из общей таблицы'); }
     if (a === 'nophoto'){ await SRV.removeAvatar(); renderAccount(); renderSettings(); toast('Фото убрано'); }
     if (a === 'unfriend'){ await SRV.removeFriend(t.dataset.id); renderAccount(); toast('Удалено из друзей'); }
     if (a === 'del2'){ await SRV.deleteAccount(); closeSheets(); renderSettings(); toast('Аккаунт удалён'); }
@@ -1414,8 +1411,8 @@ $('accBody').addEventListener('submit', async e => {
 function renderAccountRow(){
   const me = SRV.me();
   $('accGroup').innerHTML = me && me.nick
-    ? `<button class="row" id="accOpen">${avaHTML(me.id, me.ava, me.nick)}<span class="rt"><b>${esc(me.nick)}</b><span>${me.public ? 'Участвует в общей таблице' : 'Рекорды видят только друзья'}</span></span><span class="chev">›</span></button>`
-    : `<button class="row" id="accOpen"><span class="ri">👤</span><span class="rt"><b>Общая таблица</b><span>Придумайте ник: игра дня, друзья и ваше место среди всех</span></span><span class="chev">›</span></button>`;
+    ? `<button class="row" id="accOpen">${avaHTML(me.id, me.ava, me.nick)}<span class="rt"><b>${esc(me.nick)}</b><span>${me.public ? 'Участвует в общей таблице' : 'Скрыт из общей таблицы'}</span></span><span class="chev">›</span></button>`
+    : `<button class="row" id="accOpen"><span class="ri">👤</span><span class="rt"><b>Общая таблица</b><span>Придумайте ник и узнайте своё место в игре дня среди всех</span></span><span class="chev">›</span></button>`;
   $('accOpen').onclick = openAccount;
 }
 $('winSignIn').onclick = openAccount;
@@ -1434,7 +1431,7 @@ async function saveResult(name){
   $('savedMsg').textContent = `Результат сохранён · ${rankOf(rec, mine.filter(r => (r.level || 'classic') === S.level))}-е место среди ваших игр`;
   const me = SRV.me();
   if (me?.nick && S.daily) sendDaily();
-  else if (me?.nick) $('savedMsg').textContent += '. В общую таблицу попадают игры дня (⚙️ → Игра дня)';
+  else if (me?.nick) $('savedMsg').textContent += '. В общую таблицу попадают игры дня: 🏆 → «Игра дня»';
 }
 // signed-in players: the first daily attempt goes to the shared table, the server re-checks the game
 async function sendDaily(){
@@ -1519,10 +1516,17 @@ function renderRecords(){
     else if (b.mine && !b.rows.some(r => r.me)){ mr.className = ''; mr.hidden = false; mr.innerHTML = `<span class="pl">${b.mine.rank}</span>${avaHTML(me.id, me.ava, me.nick, 'ava3')}<span class="nm">Вы · ${esc(me.nick)}<span>${b.mine.rank} место из ${b.total}</span></span><span class="mv">${b.mine.moves}</span>`; }
     else if (!b.mine){ mr.className = 'cta'; mr.hidden = false; mr.innerHTML = `<span>${recPeriod === '0' ? `Пройдите игру дня «${lvName}», чтобы попасть в таблицу` : `Вчера вы не играли на уровне «${lvName}»`}</span>`; }
     else mr.hidden = true;
+    const done = store.get('dailyDone', {})[todayKey() + '|' + recLevel];
+    if (recPeriod === '0' && !done) $('clearBox').innerHTML = `<button class="primary" id="playDaily" style="width:100%">📅 Сыграть игру дня · ${lvName}</button>`;
     if (recTab === 'friends') $('clearBox').innerHTML = `<form class="addfriend" id="addFriend" style="width:100%"><input id="friendCode" placeholder="Код друга, LIS-XXXX" maxlength="8" autocomplete="off"><button type="submit">Добавить</button></form>`;
-    $('recNote').textContent = `У всех одна расстановка, в зачёт идёт первая попытка дня.${pct != null ? ` Вы лучше ${pct}% ${recTab === 'friends' ? 'друзей' : 'игроков'}.` : ''}${signed && !me.public && recTab !== 'friends' ? ' Вас видят только друзья.' : ''}`;
+    $('recNote').textContent = `У всех одна расстановка, в зачёт идёт первая попытка дня.${pct != null ? ` Вы лучше ${pct}% ${recTab === 'friends' ? 'друзей' : 'игроков'}.` : ''}${signed && !me.public ? ' Другие игроки вас не видят.' : ''}`;
   }).catch(() => { if (req === boardReq){ showPages([], 'Нет связи с сервером.<br>Проверьте интернет и откройте вкладку ещё раз.'); mr.hidden = true; } });
 }
+$('clearBox').addEventListener('click', e => {
+  if (e.target.id !== 'playDaily') return;
+  SET.daily = true; SET.level = recLevel; saveSet(); renderSettings(); newGame();
+  toast(`Игра дня · ${LEVELS[recLevel].name}: у всех сегодня одна расстановка`);
+});
 $('clearBox').addEventListener('submit', async e => {
   if (e.target.id !== 'addFriend') return; e.preventDefault();
   const c = $('friendCode').value.trim(); if (!c) return;
