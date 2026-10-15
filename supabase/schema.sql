@@ -215,7 +215,7 @@ $$;
 
 -- ---------- права: таблицы закрыты, функции открыты ----------
 revoke execute on all functions in schema public from public, anon, authenticated;
-grant execute on function day_board(text, date, text), nick_free(text), fox_layout(text, int, int) to anon, authenticated;
+grant execute on function day_board(text, date, text), nick_free(text), fox_layout(text, int, int), fox_imul(bigint, bigint) to anon, authenticated;
 grant execute on function my_profile(), set_nick(text), set_public(boolean), add_friend(text), remove_friend(uuid),
   delete_account(), submit_daily(text, date, int, boolean, int[]) to authenticated;
 
