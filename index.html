@@ -339,6 +339,8 @@ html.calm *,html.calm *::before,html.calm *::after{animation:none!important;tran
 .row .rt span{font-size:13px;color:var(--fg-2);line-height:1.35}
 .row .ri{font-size:22px;width:30px;text-align:center;flex:none}
 .row .ri svg{width:26px;height:26px;display:block;margin:auto}
+a.row{color:inherit;text-decoration:none}
+html.in-tg [data-a="out"],html.in-tg [data-a="tg"],html.in-tg .authbtn[data-a="tg"]+.or{display:none}
 .authbtn .lg svg{width:24px;height:24px;display:block}
 .row.radio .mark{width:24px;height:24px;border-radius:50%;border:2px solid var(--fg-3);flex:none;display:grid;place-items:center}
 .row.radio[aria-checked="true"] .mark{border-color:var(--accent);background:var(--accent)}
@@ -628,6 +630,10 @@ html.calm *,html.calm *::before,html.calm *::after{animation:none!important;tran
       <button class="row" role="switch" id="optSound" aria-checked="true"><span class="ri">🔊</span><span class="rt"><b>Звуки</b><span>Шорох листвы, тявканье лис и фанфары.</span></span><i class="switch"></i></button>
     </div>
 
+    <div class="group" id="whereGroup">
+      <a class="row" id="playTg" href="https://t.me/FoxHuntGameBot?startapp" target="_blank" rel="noopener"><span class="ri" id="playTgIc"></span><span class="rt"><b>Играть в Telegram</b><span>Игра прямо в Telegram, тот же аккаунт и рейтинг</span></span><span class="ri" aria-hidden="true">›</span></a>
+      <button class="row" id="playWeb" hidden><span class="ri">🌐</span><span class="rt"><b>Открыть в браузере</b><span>fox-hunt.github.io: тот же аккаунт, если войти через Telegram</span></span><span class="ri" aria-hidden="true">›</span></button>
+    </div>
     <div class="group" id="installGroup" hidden>
       <button class="row" id="installGo"><span class="ri">📲</span><span class="rt"><b>Установить на телефон</b><span>Иконка с лисичкой на экране «Домой», игра на весь экран и без интернета.</span></span><span class="ri" aria-hidden="true">›</span></button>
     </div>
@@ -939,7 +945,11 @@ function sfx(name, n = 1){
   } catch {}
 }
 
-function buzz(p){ try { navigator.vibrate && navigator.vibrate(p); } catch {} }
+function buzz(p){
+  const H = TGW?.HapticFeedback;
+  if (H){ try { if (Array.isArray(p)) H.notificationOccurred('success'); else if (p >= 20) H.notificationOccurred('error'); else H.impactOccurred(p >= 10 ? 'medium' : 'light'); } catch {} return; }
+  try { navigator.vibrate && navigator.vibrate(p); } catch {}
+}
 
 // ---------- victory wave over the board ----------
 function celebrate(from){
@@ -1301,6 +1311,13 @@ const SRV = (() => {
       if (!r.ok) throw new Error(d.error || 'server');
       return setMe({ ...store.get('acc.profile', null), ava: d.photo });
     },
+    async tgWebApp(initData){
+      const t = await token();
+      const r = await go(URL + '/functions/v1/tg', { method: 'POST', headers: hdr(t), body: JSON.stringify({ action: 'webapp', initData }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || d.status !== 'ok') throw new Error(d.error || 'server');
+      keep(d.session); setMe(null); await this.refresh(); return d;
+    },
     async tgPoll(nonce){
       const t = await token();
       const r = await go(URL + '/functions/v1/tg', { method: 'POST', headers: hdr(t), body: JSON.stringify({ nonce }) });
@@ -1385,6 +1402,38 @@ async function tgTick(){
   } catch {} finally { tgBusy = false; }
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && store.get('tgNonce', null)) tgTick(); });
+
+// ---------- inside Telegram (Mini App): full screen, no swipe-to-close, automatic sign-in ----------
+let TGW = null;
+const inTG = /tgWebAppData=/.test(location.hash) || (() => { try { return /tgWebAppData=/.test(sessionStorage.getItem('tgHash') || ''); } catch { return false; } })();
+if (inTG){
+  try { if (location.hash) sessionStorage.setItem('tgHash', location.hash); } catch {}
+  document.documentElement.classList.add('in-tg');
+  const sc = document.createElement('script');
+  sc.src = 'https://telegram.org/js/telegram-web-app.js'; sc.onload = tgApp;
+  document.head.appendChild(sc);
+}
+function tgApp(){
+  TGW = window.Telegram?.WebApp; if (!TGW?.initData) return;
+  try { TGW.ready(); TGW.expand(); TGW.disableVerticalSwipes?.(); } catch {}
+  tgAppLogin();
+}
+async function tgAppLogin(){
+  const id = TGW.initDataUnsafe?.user?.id, me = SRV.me();
+  if (me?.nick && me.tg && store.get('tgId', null) === id && store.get('sb.session', null)) return;   // already this player
+  try {
+    const d = await SRV.tgWebApp(TGW.initData); store.set('tgId', d.tg_id);
+    if (!SRV.me()?.nick){                                  // a new player: take the nick from Telegram
+      const base = tgNickFrom(d.name, d.username) || 'Охотник';
+      for (const n of [base, base.slice(0, 13) + (10 + Math.random() * 89 | 0), 'Охотник' + (100 + Math.random() * 899 | 0)]){
+        try { await SRV.setNick(n); break; } catch (e){ if (e.message !== 'taken') break; }
+      }
+      if (d.photo && SRV.me()?.nick) await SRV.setAvatarV(d.photo).catch(() => {});
+    }
+    renderSettings(); netStatsT = 0;
+    if (SRV.me()?.nick) toast(`Привет, ${SRV.me().nick}! 🦊`); else openAccount();
+  } catch { toast('Не получилось войти через Telegram'); }
+}
 
 let accStep = 'nick', accConfirmDel = false, accBusy = false;
 const photoBlock = me => `<div class="avarow">${avaHTML(me?.id, me?.ava, me?.nick, 'ava2 avabig')}
@@ -1819,6 +1868,36 @@ function fireworks(area){
     if (++t < 200 && alive) requestAnimationFrame(f); else x.clearRect(0, 0, innerWidth, innerHeight);
   })();
 }
+
+// ---------- install as an app ----------
+(() => {
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const embedded = window.top !== window.self || inTG;
+  let prompt = null;
+  const show = on => { $('installGroup').hidden = !on || standalone || embedded; };
+  const SHARE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
+  addEventListener('beforeinstallprompt', e => { e.preventDefault(); prompt = e; show(true); });
+  addEventListener('appinstalled', () => { prompt = null; show(false); toast('Игра установлена! Ищите лисичку на экране'); });
+  if (ios) show(true);
+  $('installGo').onclick = async () => {
+    if (prompt){ prompt.prompt(); const r = await prompt.userChoice.catch(() => null); if (r?.outcome === 'accepted') show(false); prompt = null; return; }
+    $('instSteps').innerHTML = ios
+      ? `<li><span class="n">${SHARE}</span><span>Нажмите кнопку <b>«Поделиться»</b> внизу экрана Safari (квадрат со стрелкой вверх).</span></li>
+         <li><span class="n">＋</span><span>Пролистайте меню и выберите <b>«На экран „Домой“»</b>.</span></li>
+         <li><span class="n">✓</span><span>Нажмите <b>«Добавить»</b>. Готово, лисичка на экране!</span></li>`
+      : `<li><span class="n">⋮</span><span>Откройте меню браузера (три точки в углу).</span></li>
+         <li><span class="n">＋</span><span>Выберите <b>«Установить приложение»</b> или <b>«Добавить на главный экран»</b>.</span></li>
+         <li><span class="n">✓</span><span>Подтвердите. Готово, лисичка на экране!</span></li>`;
+    openSheet('sheetInstall');
+  };
+  // where to play: Telegram ↔ browser, one account
+  $('playTgIc').innerHTML = TG_ICON;
+  $('playTg').hidden = inTG;
+  $('playWeb').hidden = !inTG;
+  $('playWeb').onclick = () => { try { TGW.openLink('https://fox-hunt.github.io/'); } catch { open('https://fox-hunt.github.io/', '_blank'); } };
+})();
+ 
 
 // ---------- confetti ----------
 function confetti(n = 140){

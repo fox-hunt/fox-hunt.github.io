@@ -48,6 +48,74 @@ async function copyPhoto(tgId: number, uid: string): Promise<number | null> {
   }
 }
 
+const bearerOf = (req: Request) => req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+async function userOf(req: Request): Promise<{ id: string; email?: string } | null> {
+  const b = bearerOf(req);
+  if (b.split(".").length !== 3) return null;
+  const { data } = await db.auth.getUser(b);
+  return data?.user ?? null;
+}
+
+// Mini App: check Telegram's signature of initData (HMAC with the bot token)
+async function hmac(key: ArrayBuffer | Uint8Array, data: string) {
+  const k = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return new Uint8Array(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(data)));
+}
+async function checkInitData(initData: string) {
+  const p = new URLSearchParams(initData);
+  const hash = p.get("hash");
+  if (!hash) return null;
+  p.delete("hash");
+  const check = [...p.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, v]) => `${k}=${v}`).join("\n");
+  const secret = await hmac(new TextEncoder().encode("WebAppData"), BOT);
+  const calc = [...await hmac(secret, check)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  if (calc !== hash) return null;
+  if (Date.now() / 1000 - Number(p.get("auth_date") || 0) > 86400) return null;
+  try { return JSON.parse(p.get("user") || "null"); } catch { return null; }
+}
+
+// find (or create, or attach to the caller's nick) the player for this Telegram account and open a session
+async function loginAs(tgId: number, tgName: string | null, tgUser: string | null, caller: { id: string; email?: string } | null) {
+  const email = `tg${tgId}@fox-hunt.github.io`;
+  const { data: link } = await db.from("tg_links").select("user_id").eq("tg_id", tgId).maybeSingle();
+  let uid: string | undefined = link?.user_id;
+  let linked = false;
+  if (!uid) {
+    if (caller && !caller.email) {
+      uid = caller.id;                                      // keep this device's nick and results
+      const { error } = await db.auth.admin.updateUserById(uid, { email, email_confirm: true });
+      if (error) return json({ error: "link" }, 500);
+    } else {
+      const { data: c, error } = await db.auth.admin.createUser({ email, email_confirm: true });
+      if (error || !c.user) return json({ error: "create" }, 500);
+      uid = c.user.id;
+    }
+    await db.from("tg_links").insert({ tg_id: tgId, user_id: uid, tg_user: tgUser });
+    linked = true;
+  } else if (tgUser) {
+    await db.from("tg_links").update({ tg_user: tgUser }).eq("tg_id", tgId);
+  }
+
+  // a fresh session for that player (magic link made and used right here, no e-mail is sent)
+  const { data: gl, error: ge } = await db.auth.admin.generateLink({ type: "magiclink", email });
+  if (ge || !gl?.properties?.hashed_token) return json({ error: "link" }, 500);
+  const { data: v, error: ve } = await admin().auth.verifyOtp({ type: "magiclink", token_hash: gl.properties.hashed_token });
+  if (ve || !v?.session) return json({ error: "session" }, 500);
+
+  // Telegram photo as the avatar, unless the player already has one
+  const { data: prof } = await db.from("profiles").select("avatar_v").eq("id", uid).maybeSingle();
+  let photo: number | null = null;
+  if (!prof?.avatar_v) {
+    photo = await copyPhoto(tgId, uid!);
+    if (photo && prof) await db.from("profiles").update({ avatar_v: photo }).eq("id", uid);
+  }
+  const s = v.session;
+  return json({
+    status: "ok", linked, tg_id: tgId, name: tgName, username: tgUser, photo,
+    session: { access_token: s.access_token, refresh_token: s.refresh_token, expires_at: s.expires_at, expires_in: s.expires_in },
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const url = new URL(req.url);
@@ -56,8 +124,9 @@ Deno.serve(async (req) => {
   if (req.method === "GET") {
     if (!SECRET || url.searchParams.get("setup") !== SECRET) return json({ error: "not found" }, 404);
     const hook = await tg("setWebhook", { url: `${SB_URL}/functions/v1/tg`, secret_token: SECRET, allowed_updates: ["message"] });
+    const menu = await tg("setChatMenuButton", { menu_button: { type: "web_app", text: "Играть", web_app: { url: SITE } } });
     const me = await tg("getMe", {});
-    return json({ webhook: hook, bot: me?.result?.username });
+    return json({ webhook: hook, menu, bot: me?.result?.username });
   }
 
   // Telegram webhook
@@ -79,20 +148,24 @@ Deno.serve(async (req) => {
     } else {
       await tg("sendMessage", {
         chat_id: m.chat.id,
-        text: "Привет! Я бот игры «Охота на лис» 🦊\nЧтобы войти, нажмите «Войти через Telegram» в настройках игры.",
-        reply_markup: { inline_keyboard: [[{ text: "🦊 Играть", url: SITE }]] },
+        text: "Привет! Я бот игры «Охота на лис» 🦊\nНажмите «Играть», и игра откроется прямо здесь. Вход и общая таблица — автоматически.",
+        reply_markup: { inline_keyboard: [[{ text: "🦊 Играть", web_app: { url: SITE } }]] },
       });
     }
     return json({ ok: true });
   }
 
-  // the game: { action: "photo" } — take the avatar from Telegram again; otherwise { nonce } — poll a login
+  // the game: { action: "webapp", initData } — Mini App sign-in; { action: "photo" } — avatar from Telegram; { nonce } — poll a login
   if (req.method === "POST") {
     const body = await req.json().catch(() => ({}));
+    if (body.action === "webapp") {                       // opened inside Telegram: sign in at once
+      const u = await checkInitData(String(body.initData || ""));
+      if (!u?.id) return json({ error: "initdata" }, 401);
+      const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || null;
+      return await loginAs(u.id, name, u.username ?? null, await userOf(req));
+    }
     if (body.action === "photo") {
-      const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-      const { data } = bearer.split(".").length === 3 ? await db.auth.getUser(bearer) : { data: null };
-      const uid = data?.user?.id;
+      const uid = (await userOf(req))?.id;
       if (!uid) return json({ error: "auth" }, 401);
       const { data: link } = await db.from("tg_links").select("tg_id").eq("user_id", uid).maybeSingle();
       if (!link) return json({ error: "notg" }, 400);
@@ -108,53 +181,7 @@ Deno.serve(async (req) => {
     await db.from("tg_logins").delete().eq("nonce", nonce);
     if (Date.now() - Date.parse(L.created_at) > 15 * 60e3) return json({ status: "expired" });
 
-    // the player already on this device (an account without Telegram), if any
-    let caller: { id: string; email?: string } | null = null;
-    const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-    if (bearer.split(".").length === 3) {
-      const { data } = await db.auth.getUser(bearer);
-      caller = data?.user ?? null;
-    }
-
-    const email = `tg${L.tg_id}@fox-hunt.github.io`;
-    const { data: link } = await db.from("tg_links").select("user_id").eq("tg_id", L.tg_id).maybeSingle();
-    let uid: string | undefined = link?.user_id;
-    let linked = false;
-    if (!uid) {
-      if (caller && !caller.email) {
-        uid = caller.id;                                    // keep this device's nick and results
-        const { error } = await db.auth.admin.updateUserById(uid, { email, email_confirm: true });
-        if (error) return json({ error: "link" }, 500);
-      } else {
-        const { data: c, error } = await db.auth.admin.createUser({ email, email_confirm: true });
-        if (error || !c.user) return json({ error: "create" }, 500);
-        uid = c.user.id;
-      }
-      await db.from("tg_links").insert({ tg_id: L.tg_id, user_id: uid, tg_user: L.tg_user });
-      linked = true;
-    } else if (L.tg_user) {
-      await db.from("tg_links").update({ tg_user: L.tg_user }).eq("tg_id", L.tg_id);
-    }
-
-    // a fresh session for that player (magic link made and used right here, no e-mail is sent)
-    const { data: gl, error: ge } = await db.auth.admin.generateLink({ type: "magiclink", email });
-    if (ge || !gl?.properties?.hashed_token) return json({ error: "link" }, 500);
-    const { data: v, error: ve } = await admin().auth.verifyOtp({ type: "magiclink", token_hash: gl.properties.hashed_token });
-    if (ve || !v?.session) return json({ error: "session" }, 500);
-
-    // Telegram photo as the avatar, unless the player already has one
-    const { data: prof } = await db.from("profiles").select("avatar_v").eq("id", uid).maybeSingle();
-    let photo: number | null = null;
-    if (!prof?.avatar_v) {
-      photo = await copyPhoto(L.tg_id, uid!);
-      if (photo && prof) await db.from("profiles").update({ avatar_v: photo }).eq("id", uid);
-    }
-
-    const s = v.session;
-    return json({
-      status: "ok", linked, name: L.tg_name, username: L.tg_user, photo,
-      session: { access_token: s.access_token, refresh_token: s.refresh_token, expires_at: s.expires_at, expires_in: s.expires_in },
-    });
+    return await loginAs(L.tg_id, L.tg_name, L.tg_user, await userOf(req));
   }
 
   return json({ error: "not found" }, 404);
