@@ -1413,7 +1413,11 @@ const SRV = (() => {
       const r = await go(URL + '/functions/v1/tg', { method: 'POST', headers: hdr(t), body: JSON.stringify({ nonce, handoff: !!handoff }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || 'server');
-      if (d.status === 'ok'){ keep(d.session); setMe(null); await this.refresh(); }
+      if (d.status === 'ok'){
+        keep(d.session); setMe(null);
+        // the profile decides "existing player or new one", so a failed load must not look like "no profile yet"
+        for (let i = 0; i < 3 && !d.profile; i++){ try { setMe(await rpc('my_profile')); d.profile = true; } catch { await new Promise(r => setTimeout(r, 800)); } }
+      }
       return d;
     },
     submitDaily: ({ level, day, ms, hints, opened }) => rpc('submit_daily', { p_level: level, p_day: day, p_time_ms: Math.round(ms), p_hints: !!hints, p_opened: opened }),
@@ -1467,7 +1471,7 @@ const tgNickFrom = (name, user) => {
 // a one-time sign-in code: 32 hex characters, as the server expects
 const tgNewNonce = () => [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
 function tgStart(){
-  const n = tgNewNonce();
+  const n = tgNewNonce(); tgFails = 0;
   store.set('tgNonce', { n, at: Date.now() });
   tgOpen(); tgWatch(); accStep = 'tgwait'; renderAccount();
 }
@@ -1482,7 +1486,7 @@ function tgStop(msg){
   if (accStep === 'tgwait'){ accStep = SRV.me()?.nick ? 'manage' : 'nick'; renderAccount(); }
   if (msg) toast(msg);
 }
-let tgBusy = false;
+let tgBusy = false, tgFails = 0;
 async function tgTick(){
   const p = store.get('tgNonce', null);
   if (!p) return tgStop();
@@ -1491,19 +1495,23 @@ async function tgTick(){
   tgBusy = true;
   try {
     const d = await SRV.tgPoll(p.n, p.h);
-    if (d.status !== 'ok' && store.get('tgNonce', null)?.n !== p.n) return;   // an answer for an old code: a new attempt is under way
+    tgFails = 0;
+    if (store.get('tgNonce', null)?.n !== p.n){ if (d.status === 'ok') renderSettings(); return; }   // an old code (cancelled or replaced): don't touch the screen
     if (d.status === 'wait') return;
     if (d.status !== 'ok') return tgStop('Вход не удался, попробуйте ещё раз');
     tgEnd();
     const me = SRV.me();
+    if (!d.profile){ closeSheets(); renderSettings(); return toast('Вы вошли через Telegram 🦊'); }   // the profile didn't load: it comes with the next refresh
     if (me?.nick){ accStep = 'manage'; toast(`Вы вошли через Telegram: ${me.nick} 🦊`); }
     else { if (d.photo) store.set('tgPhoto', d.photo); tgNick = tgNickFrom(d.name, d.username); accStep = 'nick'; toast('Telegram подключён. Осталось выбрать ник'); }
     renderAccount(); renderSettings(); if (sheetOpen !== 'sheetAccount') openSheet('sheetAccount');
     netStatsT = 0; store.set('netStats', null);
   } catch (e){
-    if (e.message === 'net' || e.message === 'server') return;   // no connection or a passing server hiccup: the next tick tries again
     if (store.get('tgNonce', null)?.n !== p.n) return;           // an old code: leave the new attempt alone
-    tgStop('Вход не удался, попробуйте ещё раз');                // the sign-in itself was refused: the code is used up
+    // no connection, or the server stumbled (it keeps the code): try again, but not forever
+    if (e.message === 'net' || ++tgFails < 5) return;
+    tgFails = 0;
+    tgStop('Вход не удался, попробуйте ещё раз');
   } finally { tgBusy = false; }
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && store.get('tgNonce', null)) tgTick(); });

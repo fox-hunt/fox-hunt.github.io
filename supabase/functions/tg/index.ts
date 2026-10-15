@@ -309,12 +309,13 @@ Deno.serve(async (req) => {
     if (Date.now() - Date.parse(L.created_at) > 15 * 60e3) return json({ status: "expired" });
 
     // a handoff code never attaches the opener's account: it only signs in as the Telegram's own player
+    let res: Response | null = null;
     try {
-      return await loginAs(L.tg_id, L.tg_name, L.tg_user, handoff ? null : await userOf(req));   // a refusal: the game says so
-    } catch (e) {
-      await db.from("tg_logins").upsert(L);                // crashed half-way: keep the code, the game's next poll tries again
-      throw e;
+      res = await loginAs(L.tg_id, L.tg_name, L.tg_user, handoff ? null : await userOf(req));
+    } finally {
+      if (!res?.ok) await db.from("tg_logins").upsert(L);  // failed or crashed half-way: keep the code, the game's next poll tries again
     }
+    return res;
   }
 
   return json({ error: "not found" }, 404);
