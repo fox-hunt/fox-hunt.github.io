@@ -1427,9 +1427,9 @@ const SRV = (() => {
       const r = await go(URL + '/functions/v1/tg', { method: 'POST', headers: hdr(), body: JSON.stringify({ action: 'handoff', initData, nonce }) });
       return r.ok;
     },
-    async tgPoll(nonce){
-      const t = await token();
-      const r = await go(URL + '/functions/v1/tg', { method: 'POST', headers: hdr(t), body: JSON.stringify({ nonce }) });
+    async tgPoll(nonce, handoff){                            // a handoff code (from a link) is polled without this device's account
+      const t = handoff ? null : await token();
+      const r = await go(URL + '/functions/v1/tg', { method: 'POST', headers: hdr(t), body: JSON.stringify({ nonce, handoff: !!handoff }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || 'server');
       if (d.status === 'ok'){ keep(d.session); setMe(null); await this.refresh(); }
@@ -1492,27 +1492,31 @@ function tgStart(){
 function tgOpen(){ const p = store.get('tgNonce', null); if (p) location.href = `tg://resolve?domain=${TG_BOT}&start=${p.n}`; }
 const tgWebLink = () => `https://t.me/${TG_BOT}?start=${store.get('tgNonce', null)?.n || ''}`;
 function tgWatch(){ clearInterval(tgT); tgT = setInterval(tgTick, 2500); }
+// stop waiting for the bot and leave the "waiting" screen
+function tgStop(msg){
+  clearInterval(tgT); store.set('tgNonce', null);
+  if (accStep === 'tgwait'){ accStep = SRV.me()?.nick ? 'manage' : 'nick'; renderAccount(); }
+  if (msg) toast(msg);
+}
 let tgBusy = false;
 async function tgTick(){
   const p = store.get('tgNonce', null);
-  if (!p || Date.now() - p.at > 15 * 60e3){ clearInterval(tgT); store.set('tgNonce', null); if (accStep === 'tgwait'){ accStep = SRV.me()?.nick ? 'manage' : 'nick'; renderAccount(); } return; }
+  if (!p || Date.now() - p.at > 15 * 60e3) return tgStop();
   if (document.hidden || tgBusy) return;
   tgBusy = true;
   try {
-    const d = await SRV.tgPoll(p.n);
+    const d = await SRV.tgPoll(p.n, p.h);
     if (d.status === 'wait') return;
+    if (d.status !== 'ok') return tgStop('Вход не удался, попробуйте ещё раз');
     clearInterval(tgT); store.set('tgNonce', null);
-    if (d.status !== 'ok'){ accStep = SRV.me()?.nick ? 'manage' : 'nick'; renderAccount(); return toast('Вход не удался, попробуйте ещё раз'); }
     const me = SRV.me();
     if (me?.nick){ accStep = 'manage'; toast(`Вы вошли через Telegram: ${me.nick} 🦊`); }
     else { if (d.photo) store.set('tgPhoto', d.photo); tgNick = tgNickFrom(d.name, d.username); accStep = 'nick'; toast('Telegram подключён. Осталось выбрать ник'); }
     renderAccount(); renderSettings(); if (sheetOpen !== 'sheetAccount') openSheet('sheetAccount');
     netStatsT = 0; store.set('netStats', null);
   } catch (e){
-    if (e.message === 'net') return;                       // no connection: the next tick tries again
-    clearInterval(tgT); store.set('tgNonce', null);        // the server refused: the code is used up, start over
-    if (accStep === 'tgwait'){ accStep = SRV.me()?.nick ? 'manage' : 'nick'; renderAccount(); }
-    toast('Вход не удался, попробуйте ещё раз');
+    if (e.message === 'net' || e.message === 'server') return;   // no connection or a passing server hiccup: the next tick tries again
+    tgStop('Вход не удался, попробуйте ещё раз');                // the sign-in itself was refused: the code is used up
   } finally { tgBusy = false; }
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && store.get('tgNonce', null)) tgTick(); });
@@ -1520,7 +1524,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && st
 // ---------- inside Telegram (Mini App): full screen, no swipe-to-close, automatic sign-in ----------
 let TGW = null, inTG = false;
 { const m = location.hash.match(/(?:^#|&)login=([a-f0-9]{32})/);       // came from the Mini App: sign in as the same player
-  if (m){ store.set('tgNonce', { n: m[1], at: Date.now() }); try { history.replaceState(null, '', location.pathname + location.search); } catch {} } }
+  if (m){ store.set('tgNonce', { n: m[1], at: Date.now(), h: true }); try { history.replaceState(null, '', location.pathname + location.search); } catch {} } }
 const tgHashData = () => { try { const h = location.hash.slice(1) || sessionStorage.getItem('tgHash') || ''; return new URLSearchParams(h.replace(/^#/, '')).get('tgWebAppData') || ''; } catch { return ''; } };
 { // Telegram announces itself differently on iPhone / Android / Mac / desktop / web
   try { if (/tgWebAppData=/.test(location.hash)) sessionStorage.setItem('tgHash', location.hash); } catch {}
@@ -1614,7 +1618,7 @@ $('accBody').addEventListener('click', async e => {
   if (a === 'photo'){ $('avaFile').click(); return; }
   if (a === 'tg'){ tgStart(); return; }
   if (a === 'tgagain'){ tgOpen(); return; }
-  if (a === 'tgcancel'){ clearInterval(tgT); store.set('tgNonce', null); accStep = me?.nick ? 'manage' : 'nick'; renderAccount(); return; }
+  if (a === 'tgcancel'){ tgStop(); return; }
   if (a === 'out'){ SRV.signOut(); tgNick = ''; closeSheets(); renderSettings(); toast('Вы вышли. Войти снова: ⚙️ → Общая таблица → Telegram'); return; }
   if (a === 'del'){ accConfirmDel = true; renderAccount(); }
   if (a === 'nodel'){ accConfirmDel = false; renderAccount(); }
