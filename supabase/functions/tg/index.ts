@@ -167,10 +167,11 @@ async function loginAs(tgId: number, tgName: string | null, tgUser: string | nul
   if (ve || !v?.session) return json({ error: "session" }, 500);
 
   // Telegram photo as the avatar, unless the player already has one
-  // (a player without a nick has no profile yet: the photo is copied once, when Telegram gets linked)
+  // — only when Telegram gets linked: a photo the player removed later must not come back on the next sign-in
+  // (a player without a nick has no profile yet: the client keeps the photo until the nick is chosen)
   const { data: prof } = await db.from("profiles").select("avatar_v").eq("id", uid).maybeSingle();
   let photo: number | null = null;
-  if (prof ? !prof.avatar_v : fresh) {
+  if (fresh && !prof?.avatar_v) {
     photo = await copyPhoto(tgId, uid!);
     if (photo && prof) await db.from("profiles").update({ avatar_v: photo }).eq("id", uid);
   }

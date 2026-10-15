@@ -1525,9 +1525,10 @@ async function tgTick(){
     tgEnd();
     const me = SRV.me();
     netStatsT = 0; store.set('netStats', null);
+    if (d.photo) store.set('tgPhoto', d.photo); tgNick = tgNickFrom(d.name, d.username);   // for the nick form, if this turns out to be a new player
     if (!d.profile){ closeSheets(); renderSettings(); tgProfileLater(); return toast('Вы вошли через Telegram 🦊'); }
     if (me?.nick){ accStep = 'manage'; toast(`Вы вошли через Telegram: ${me.nick} 🦊`); }
-    else { if (d.photo) store.set('tgPhoto', d.photo); tgNick = tgNickFrom(d.name, d.username); accStep = 'nick'; toast('Telegram подключён. Осталось выбрать ник'); }
+    else { accStep = 'nick'; toast('Telegram подключён. Осталось выбрать ник'); }
     renderAccount(); renderSettings(); if (sheetOpen !== 'sheetAccount') openSheet('sheetAccount');
   } catch (e){
     if (store.get('tgNonce', null)?.n !== p.n) return;           // an old code: leave the new attempt alone
@@ -1572,14 +1573,18 @@ async function tgAppLogin(initData){
   if (me?.nick && me.tg && store.get('tgId', null) === id && store.get('sb.session', null)) return;   // already this player
   try {
     const d = await SRV.tgWebApp(initData); store.set('tgId', d.tg_id);
-    if (d.profile && !SRV.me()?.nick){                                  // a new player: take the nick from Telegram
+    netStatsT = 0; store.set('netStats', null);              // the stats on screen belonged to the account before
+    if (d.photo) store.set('tgPhoto', d.photo);              // set as the avatar once there is a nick
+    tgNick = tgNickFrom(d.name, d.username);
+    if (!d.profile){ renderSettings(); tgProfileLater(); return toast('Вы вошли через Telegram 🦊'); }   // never offer an existing player a "new nick" form
+    if (!SRV.me()?.nick){                                  // a new player: take the nick from Telegram
       const base = tgNickFrom(d.name, d.username) || 'Охотник';
       for (const n of [base, base.slice(0, 13) + (10 + Math.random() * 89 | 0), 'Охотник' + (100 + Math.random() * 899 | 0)]){
         try { await SRV.setNick(n); break; } catch (e){ if (e.message !== 'taken') break; }
       }
-      if (d.photo && SRV.me()?.nick) await SRV.setAvatarV(d.photo).catch(() => {});
+      if (d.photo && SRV.me()?.nick){ store.set('tgPhoto', null); await SRV.setAvatarV(d.photo).catch(() => {}); }
     }
-    renderSettings(); netStatsT = 0;
+    renderSettings();
     if (SRV.me()?.nick) toast(`Привет, ${SRV.me().nick}! 🦊`); else openAccount();
   } catch (e){ toast(e.message.startsWith('initdata') ? 'Telegram не подтвердил вход (' + e.message.split(':')[1] + '). Закройте игру и откройте снова' : e.message === 'net' ? 'Нет связи с сервером' : 'Не получилось войти через Telegram (' + e.message + ')'); }
 }
@@ -1603,8 +1608,8 @@ function renderAccount(){
   if (accStep === 'nick' || !me?.nick){
     const sug = suggestNicks();
     $('accT').textContent = me?.nick ? 'Ваш ник' : 'Общая таблица';
-    $('accSub').textContent = me?.nick ? 'Так вас видят в таблицах рекордов.' : TG_BOT ? 'Войдите через Telegram: рейтинг сохранится на любом устройстве. Или просто придумайте ник.' : 'Придумайте ник, и ваши игры дня попадут в общую таблицу. Почту и пароль не спрашиваем.';
     const viaTg = me?.tg || SRV.viaTelegram();
+    $('accSub').textContent = me?.nick ? 'Так вас видят в таблицах рекордов.' : viaTg ? 'Telegram подключён. Придумайте ник — так вас увидят в таблице игры дня.' : TG_BOT ? 'Войдите через Telegram: рейтинг сохранится на любом устройстве. Или просто придумайте ник.' : 'Придумайте ник, и ваши игры дня попадут в общую таблицу. Почту и пароль не спрашиваем.';
     const tgBtn = TG_BOT && !me?.nick && !viaTg ? `<button class="authbtn" data-a="tg"><span class="lg">${TG_ICON}</span>Войти через Telegram</button><div class="or">или просто придумайте ник</div>` : '';
     b.innerHTML = `${tgBtn}${me?.nick ? photoBlock(me) : ''}<form class="body" id="nickForm" style="margin:0;gap:10px"><div class="field"><input id="accNick" maxlength="20" autocomplete="nickname" placeholder="Например, ${sug[0]}" value="${esc(me?.nick || tgNick || '')}" required></div>
       <p class="hintline" id="nickHint">${NICK_RULE}</p>
@@ -1673,6 +1678,7 @@ $('accBody').addEventListener('submit', async e => {
   if (e.target.id !== 'nickForm' || accBusy) return;
   const n = normNick($('accNick').value), bad = nickProblem(n), h = $('nickHint'); if (bad) return;
   accBusy = true; $('nickSave').disabled = true;
+  const first = !SRV.me()?.nick;                             // the first nick creates the profile
   try { await SRV.setNick(n); }
   catch (err){
     h.className = 'hintline bad';
@@ -1680,7 +1686,9 @@ $('accBody').addEventListener('submit', async e => {
     accBusy = false; $('nickSave').disabled = false; return;
   }
   accBusy = false;
-  const ph = store.get('tgPhoto', null); if (ph){ store.set('tgPhoto', null); try { await SRV.setAvatarV(ph); } catch {} }
+  // the Telegram photo kept since sign-in: only for a profile just created (an existing one got it on the server)
+  const ph = store.get('tgPhoto', null); store.set('tgPhoto', null);
+  if (ph && first && !SRV.me()?.ava){ try { await SRV.setAvatarV(ph); } catch {} }
   tgNick = ''; store.set('name', n); accStep = 'manage'; renderAccount(); renderSettings(); toast(`Привет, ${n}! 🦊`);
   if (S.end && (!S.saved || (S.daily && !S.sent))) win();
 });
