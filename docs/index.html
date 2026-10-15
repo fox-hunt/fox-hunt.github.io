@@ -127,7 +127,7 @@ h1 .peek .pk{animation:peek 5.5s ease-in-out .8s infinite}
   background:linear-gradient(160deg,var(--tile-hi),var(--tile) 55%);
   box-shadow:inset 0 1px 0 var(--tile-hi),0 2px 6px -2px var(--glass-shadow);
   transition:transform .28s cubic-bezier(.2,.9,.3,1.4),background .45s ease,box-shadow .45s ease,opacity .45s ease;
-  transition-delay:0s,var(--d,0s),var(--d,0s),var(--d,0s);transform-style:preserve-3d;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+  transition-delay:0s,var(--d,0s),var(--d,0s),var(--d,0s);transform-style:preserve-3d;user-select:none;-webkit-user-select:none;touch-action:manipulation;-webkit-touch-callout:none}
 .cell > svg{position:absolute;left:8%;top:8%;width:84%;height:84%}
 .cell > .foxsvg{left:2%;top:2%;width:96%;height:96%}
 .cell .tree{font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;font-size:calc(var(--cs,44px) * .62);line-height:1;display:block;transform-origin:50% 92%;transition:transform .3s cubic-bezier(.2,.9,.3,1.4),filter .45s,opacity .45s;transition-delay:0s,var(--d,0s),var(--d,0s)}
@@ -135,6 +135,11 @@ h1 .peek .pk{animation:peek 5.5s ease-in-out .8s infinite}
 @keyframes rustle{25%{transform:rotate(-6deg)}60%{transform:rotate(5deg)}}
 .cell.dead .tree{filter:grayscale(1);opacity:.28}
 .cell.dead.fresh .tree{animation:shiver .75s ease-in-out var(--d,0s) both}
+.cell .mk{position:absolute;right:4%;top:2%;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;font-size:calc(var(--cs,44px) * .32);line-height:1;pointer-events:none;filter:drop-shadow(0 1px 1px rgba(0,0,0,.25))}
+.cell.mno:not(.dead) .tree{transform:scale(.86)}
+.cell.mpop .tree,.cell.mpop .mk{animation:mpop .32s cubic-bezier(.2,.9,.3,1.4)}
+@keyframes mpop{0%{transform:scale(.5)}100%{transform:none}}
+.board.marking .cell.closed:not(.dead){box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--fox) 55%,transparent),0 2px 6px -2px var(--glass-shadow)}
 @keyframes shiver{0%{transform:none}15%{transform:rotate(-12deg) scale(1.08)}35%{transform:rotate(10deg) scale(1.08)}55%{transform:rotate(-7deg)}75%{transform:rotate(4deg)}100%{transform:none}}
 .lf1{fill:var(--leaf-1)} .lf2{fill:var(--leaf-2)} .lf3{fill:var(--leaf-3)} .trk{fill:var(--trunk)} .gnd{fill:var(--ground)}
 .fur{fill:var(--fur)} .fur2{fill:var(--fur-2)} .crm{fill:var(--cream)} .ink{fill:var(--ink)} .iris{fill:var(--iris)}
@@ -185,6 +190,11 @@ h1 .peek .pk{animation:peek 5.5s ease-in-out .8s infinite}
   background:linear-gradient(150deg,var(--fox),var(--fox-2));color:var(--fox-ink);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 8px 22px -6px var(--fox);transition:transform .25s cubic-bezier(.2,.9,.3,1.4)}
 .primary:active{transform:scale(.94)}
+.markbtn{width:48px;height:48px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:23px;line-height:1;
+  font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;transition:transform .25s cubic-bezier(.2,.9,.3,1.4),background .3s,box-shadow .3s;
+  background:color-mix(in srgb,var(--fg-2) 12%,transparent)}
+.markbtn:active{transform:scale(.9)}
+.markbtn[aria-pressed="true"]{background:color-mix(in srgb,var(--fox) 22%,transparent);box-shadow:inset 0 0 0 2px var(--fox)}
 .primary.wide{width:100%;height:54px;font-size:17px;flex:none}
 .sheet .body > *{flex-shrink:0}
 
@@ -492,6 +502,15 @@ html.calm *,html.calm *::before,html.calm *::after{animation:none!important;tran
   .dock{bottom:calc(32px + env(safe-area-inset-bottom,0px))}
   .dockcap{display:block;position:fixed;left:0;right:0;z-index:5;bottom:calc(8px + env(safe-area-inset-bottom,0px));text-align:center;font-size:12.5px;font-weight:600;color:var(--fg-2);pointer-events:none}
   .app{padding-block:10px 104px}
+  .dock{gap:6px}
+  .toggle{gap:6px;padding:0 6px 0 12px;font-size:14px}
+  .primary{padding:0 14px;font-size:14px}
+}
+@media (max-width:370px){
+  .switch{width:44px;height:27px}
+  .switch::after{width:23px;height:23px}
+  .toggle[aria-checked="true"] .switch::after{transform:translateX(17px)}
+  .markbtn{width:44px;height:44px;font-size:21px}
 }
 </style>
 
@@ -557,6 +576,7 @@ html.calm *,html.calm *::before,html.calm *::after{animation:none!important;tran
 
 <nav class="dock glass" aria-label="Управление">
   <button class="toggle" id="btnHints" role="switch" aria-checked="true"><span>Подсказки</span><i class="switch"></i></button>
+  <button class="markbtn" id="btnMark" aria-pressed="false" aria-label="Режим пометок" title="Пометки: 🪵 лисы нет, ❓ может быть лиса">🪵</button>
   <button class="primary" id="btnNew">Новая игра</button>
 </nav>
 <div class="dockcap" id="dockCap"></div>
@@ -575,6 +595,7 @@ html.calm *,html.calm *::before,html.calm *::after{animation:none!important;tran
       <li><span class="ic">🌳</span><span>Под каждым деревом может прятаться лиса.</span></li>
       <li><span class="ic"><span class="demo" style="grid-template-columns:repeat(2,13px);gap:2px"><i class="d" style="width:13px;height:13px;border-radius:4px"></i><i class="d" style="width:13px;height:13px;border-radius:4px"></i></span></span><span>С подсказками: когда цифра «нашла» всех своих лис, она зачёркивается, а все её линии штрихуются. Лис там больше нет, и нажать на эти клетки нельзя.</span></li>
       <li><span class="ic">👆</span><span>Удерживайте открытую цифру, чтобы подсветить её линии.</span></li>
+      <li><span class="ic">🪵</span><span>Свои пометки: включите кнопку 🪵 внизу и нажимайте на деревья. Первое нажатие ставит пенёк 🪵 («лисы нет»), второе — ❓ («тут, наверное, лиса»), третье убирает пометку. Без режима: удерживайте дерево, на компьютере — правый клик. Пометки не считаются ходами, а клетку с пеньком нельзя открыть случайно.</span></li>
       <li><span class="ic">⏸</span><span>Нажмите на время, чтобы поставить игру на паузу. Пока пауза, поле скрыто.</span></li>
       <li><span class="ic">⚙️</span><span>В настройках: уровень сложности, игра дня, тёмная тема, звуки и позы лис.</span></li>
     </ul>
@@ -745,7 +766,7 @@ function newState(){
   while (foxes.length < lv.foxes){ const i = rnd() * lv.n * lv.n | 0; if (!foxes.includes(i)) foxes.push(i); }
   const poses = foxes.map((_, k) => k === 0 ? POSES[1 + (rnd() * (POSES.length - 1) | 0)] : POSES[rnd() * POSES.length | 0]);
   const hints = S ? S.hints : store.get('hints', true);
-  return { v: 3, level, daily, foxes, poses, opened: [], hints, hintsEver: hints, start: 0, end: 0, pausedMs: 0, pauseAt: 0, saved: false };
+  return { v: 3, level, daily, foxes, poses, opened: [], marks: {}, hints, hintsEver: hints, start: 0, end: 0, pausedMs: 0, pauseAt: 0, saved: false };
 }
 const isFox = i => S.foxes.includes(i);
 const count = i => S.foxes.filter(f => onLine(i, f)).length;       // like 'Прятки'!M2:V11
@@ -817,8 +838,13 @@ function render(animate = true){
       b.setAttribute('aria-label', `${where}: ${fox ? 'лиса' : n + (done.has(i) ? ', все найдены' : '')}`);
       b.disabled = false;
     } else {
-      if (!b.firstChild || b.dataset.n != null){ b.innerHTML = '<span class="tree">🌳</span>'; delete b.dataset.n; }
-      b.setAttribute('aria-label', `${where}, ${isDead ? 'лис нет' : 'закрыта'}`);
+      const m = isDead ? '' : (S.marks[i] || ''), t = 't' + m;
+      if (b.dataset.t !== t || b.dataset.n != null){
+        b.innerHTML = m === 'no' ? '<span class="tree">🪵</span>' : '<span class="tree">🌳</span>' + (m === 'maybe' ? '<span class="mk">❓</span>' : '');
+        b.dataset.t = t; delete b.dataset.n;
+      }
+      b.classList.toggle('mno', m === 'no');
+      b.setAttribute('aria-label', `${where}, ${isDead ? 'лис нет' : m === 'no' ? 'пометка: лисы нет' : m === 'maybe' ? 'пометка: может быть лиса' : 'закрыта'}`);
       b.disabled = isDead || !!S.end || !!S.pauseAt;
     }
   });
@@ -829,6 +855,8 @@ function render(animate = true){
   [...$('sFox').children].forEach((d, k) => d.classList.toggle('on', k < f));
   $('sFox').setAttribute('aria-label', `Найдено ${f} из ${FOXES}`);
   $('btnHints').setAttribute('aria-checked', String(S.hints));
+  $('btnMark').setAttribute('aria-pressed', String(markMode));
+  board.classList.toggle('marking', markMode && !S.end);
   const won = !!S.end;
   board.classList.toggle('won', won); $('boardcard').classList.toggle('won', won);
   $('wonbadge').hidden = !won;
@@ -838,6 +866,7 @@ function render(animate = true){
     $('wonTier').textContent = tierOf(S.opened.length).badge;
   }
   $('hint').textContent = S.end ? 'Все лисы найдены! Начните новую игру или сохраните результат.'
+    : markMode ? 'Режим пометок: нажмите на дерево — 🪵 лисы нет, ещё раз — ❓ может быть лиса, ещё раз — снять. Выключите 🪵 внизу, чтобы открывать клетки.'
     : S.opened.length === 0 ? `Нажмите на любую клетку леса. Здесь прячутся ${FOXES} ${plural(FOXES, 'лиса', 'лисы', 'лис')}. Цифра покажет, сколько их на той же горизонтали, вертикали и диагоналях.`
     : S.hints ? 'Заштрихованные клетки пустые: туда можно не ходить. Удерживайте цифру, чтобы увидеть её линии.'
     : 'Подсказки выключены: все клетки доступны.';
@@ -950,7 +979,7 @@ function openCell(i){
   if (S.hints && analyse().dead.has(i)){ buzz(20); sfx('nope'); toast('Здесь лис точно нет'); return; }
   if (!S.start){ S.start = Date.now(); const st = store.get('stats', { wins: 0 }); st.played = st.played || {}; st.played[S.level] = (st.played[S.level] || 0) + 1; store.set('stats', st); }
   const prevFox = S.opened.length && isFox(S.opened[S.opened.length - 1]);
-  S.opened.push(i);
+  S.opened.push(i); delete S.marks[i];
   if (isFox(i)){
     buzz([12, 40, 18]); sfx('fox');
     unlock('first');
@@ -963,21 +992,51 @@ function openCell(i){
 }
 board.addEventListener('click', e => {
   const b = e.target.closest('.cell'); if (!b || suppressClick) return;
-  openCell(+b.dataset.i);
+  const i = +b.dataset.i;
+  if (!S.opened.includes(i)){
+    if (markMode){ cycleMark(i); return; }
+    if (S.marks[i] === 'no' && !(S.hints && analyse().dead.has(i))){ buzz(20); sfx('nope'); toast('Тут пенёк 🪵 Сначала снимите пометку'); return; }
+  }
+  openCell(i);
 });
 
-// long-press an opened number to trace its lines
-let pressT = 0, suppressClick = false;
+// player's own marks on closed cells: 🪵 "no fox" → ❓ "maybe a fox" → none (not a move)
+let markMode = false;
+function cycleMark(i){
+  if (S.end || S.pauseAt || S.opened.includes(i) || (S.hints && analyse().dead.has(i))) return;
+  const m = S.marks[i], next = !m ? 'no' : m === 'no' ? 'maybe' : '';
+  if (next) S.marks[i] = next; else delete S.marks[i];
+  buzz(6); if (SET.sound) try { tone(next ? 880 : 520, .06, { vol: .05 }); } catch {}
+  render(false); persist();
+  const c = cells[i]; c.classList.remove('mpop'); void c.offsetWidth; c.classList.add('mpop');
+  setTimeout(() => c.classList.remove('mpop'), 350);
+}
+$('btnMark').onclick = () => {
+  markMode = !markMode; render(false);
+  toast(markMode ? 'Режим пометок включён' : 'Режим пометок выключен');
+};
+
+// long-press an opened number to trace its lines; long-press a tree to mark it
+let pressT = 0, suppressClick = false, pressXY = null, lastPtr = '';
 function trace(i){ cells.forEach((c, j) => c.classList.toggle('trace', i >= 0 && j !== i && onLine(i, j))); }
 board.addEventListener('pointerdown', e => {
-  const b = e.target.closest('.cell.open'); if (!b || b.classList.contains('fox')) return;
-  const i = +b.dataset.i; clearTimeout(pressT);
-  pressT = setTimeout(() => { trace(i); suppressClick = true; buzz(6); }, 180);
+  lastPtr = e.pointerType;
+  const b = e.target.closest('.cell'); if (!b || b.classList.contains('fox')) return;
+  const i = +b.dataset.i; clearTimeout(pressT); pressXY = [e.clientX, e.clientY];
+  if (b.classList.contains('open')) pressT = setTimeout(() => { trace(i); suppressClick = true; buzz(6); }, 180);
+  else if (!markMode && e.pointerType !== 'mouse') pressT = setTimeout(() => { suppressClick = true; cycleMark(i); }, 420);
+});
+board.addEventListener('pointermove', e => {
+  if (pressXY && Math.hypot(e.clientX - pressXY[0], e.clientY - pressXY[1]) > 10){ clearTimeout(pressT); pressXY = null; }
 });
 ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => board.addEventListener(t, () => {
-  clearTimeout(pressT); trace(-1); setTimeout(() => { suppressClick = false; }, 0);
+  clearTimeout(pressT); pressXY = null; trace(-1); setTimeout(() => { suppressClick = false; }, 0);
 }));
-board.addEventListener('contextmenu', e => e.preventDefault());
+board.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  if (lastPtr !== 'mouse') return;                       // touch long-press is handled above
+  const b = e.target.closest('.cell.closed'); if (b) cycleMark(+b.dataset.i);
+});
 
 function persist(){ S.lastSeen = Date.now(); store.set('game3', S); }
 
@@ -1631,7 +1690,7 @@ function start(data){
   const saved = data?.game || store.get('game3', null);
   const ok = saved && saved.v === 3 && LEVELS[saved.level] && Array.isArray(saved.foxes) && saved.foxes.length === LEVELS[saved.level].foxes;
   S = ok ? saved : newState();
-  S.pausedMs = S.pausedMs || 0; S.pauseAt = S.pauseAt || 0;
+  S.pausedMs = S.pausedMs || 0; S.pauseAt = S.pauseAt || 0; S.marks = S.marks || {};
   if (S.start && !S.end && !S.pauseAt) S.pauseAt = S.lastSeen || Date.now();
   buildBoard(); prevDead = new Set(); render(false);
 }
