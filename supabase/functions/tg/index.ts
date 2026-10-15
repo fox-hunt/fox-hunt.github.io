@@ -241,13 +241,14 @@ Deno.serve(async (req) => {
             await tg("answerCallbackQuery", { callback_query_id: cq.id, text: "Ссылка устарела — нажмите «Войти через Telegram» в игре ещё раз", show_alert: true });
             return json({ ok: true });
           }
-          const saved = await saveLogin(ok[1], cq.from, at);
-          // (a failed answer must not keep the button alive: the message is edited regardless)
-          await tg("answerCallbackQuery", { callback_query_id: cq.id, text: saved ? undefined : "Не получилось, попробуйте ещё раз" }).catch(() => null);
-          if (saved) await tg("editMessageText", {
-            chat_id: cq.message.chat.id, message_id: cq.message.message_id,
-            text: "✅ Готово! Вернитесь в игру «Охота на лис», вход выполнится сам.\n\nНа iPhone: «◀ Safari» в левом верхнем углу.",
-          });
+          // the button goes first: only the press that removed it saves the code (a double tap, or a press
+          // after the code was used, finds the message already edited and changes nothing)
+          const where = { chat_id: cq.message.chat.id, message_id: cq.message.message_id };
+          const edited = await tg("editMessageText", { ...where, text: "✅ Готово! Вернитесь в игру «Охота на лис», вход выполнится сам.\n\nНа iPhone: «◀ Safari» в левом верхнем углу." }).catch(() => null);
+          const saved = edited?.ok === true && await saveLogin(ok[1], cq.from, at);
+          if (edited?.ok && !saved)                            // the button is gone but nothing was saved: bring it back
+            await tg("editMessageText", { ...where, text: cq.message.text ?? "Войти в игру «Охота на лис»?", reply_markup: { inline_keyboard: [[{ text: "✅ Да, это я — войти", callback_data: cq.data }]] } }).catch(() => null);
+          await tg("answerCallbackQuery", { callback_query_id: cq.id, text: saved || !edited?.ok ? undefined : "Не получилось, попробуйте ещё раз" }).catch(() => null);
           return json({ ok: true });
         }
         await tg("answerCallbackQuery", { callback_query_id: cq.id });

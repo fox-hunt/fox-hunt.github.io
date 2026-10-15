@@ -1362,6 +1362,8 @@ const SRV = (() => {
   return {
     me: () => store.get('acc.profile', null),
     async refresh(){ if (!store.get('sb.session', null)) return null; try { return setMe(await rpc('my_profile')); } catch { return this.me(); } },
+    // after a sign-in the profile decides "existing player or new one", so a failed load must not look like "no profile yet"
+    async loadProfile(){ for (let i = 0; i < 3; i++){ try { setMe(await rpc('my_profile')); return true; } catch { await new Promise(r => setTimeout(r, 800)); } } return false; },
     nickFree: n => rpc('nick_free', { p_nick: n }),
     async setNick(n){
       await ensure();
@@ -1402,7 +1404,7 @@ const SRV = (() => {
       const r = await go(URL + '/functions/v1/tg', { method: 'POST', headers: hdr(t), body: JSON.stringify({ action: 'webapp', initData }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok || d.status !== 'ok') throw new Error((d.error || 'server') + (d.why ? ':' + d.why : ''));
-      keep(d.session); setMe(null); await this.refresh(); return d;
+      keep(d.session); setMe(null); d.profile = await this.loadProfile(); return d;
     },
     async tgHandoff(initData, nonce){
       const r = await go(URL + '/functions/v1/tg', { method: 'POST', headers: hdr(), body: JSON.stringify({ action: 'handoff', initData, nonce }) });
@@ -1413,11 +1415,7 @@ const SRV = (() => {
       const r = await go(URL + '/functions/v1/tg', { method: 'POST', headers: hdr(t), body: JSON.stringify({ nonce, handoff: !!handoff }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || 'server');
-      if (d.status === 'ok'){
-        keep(d.session); setMe(null);
-        // the profile decides "existing player or new one", so a failed load must not look like "no profile yet"
-        for (let i = 0; i < 3 && !d.profile; i++){ try { setMe(await rpc('my_profile')); d.profile = true; } catch { await new Promise(r => setTimeout(r, 800)); } }
-      }
+      if (d.status === 'ok'){ keep(d.session); setMe(null); d.profile = await this.loadProfile(); }
       return d;
     },
     submitDaily: ({ level, day, ms, hints, opened }) => rpc('submit_daily', { p_level: level, p_day: day, p_time_ms: Math.round(ms), p_hints: !!hints, p_opened: opened }),
@@ -1502,15 +1500,15 @@ async function tgTick(){
     tgEnd();
     const me = SRV.me();
     netStatsT = 0; store.set('netStats', null);
-    if (d.photo) store.set('tgPhoto', d.photo);
     if (!d.profile){ closeSheets(); renderSettings(); return toast('Вы вошли через Telegram 🦊'); }   // the profile didn't load: it comes with the next refresh
     if (me?.nick){ accStep = 'manage'; toast(`Вы вошли через Telegram: ${me.nick} 🦊`); }
-    else { tgNick = tgNickFrom(d.name, d.username); accStep = 'nick'; toast('Telegram подключён. Осталось выбрать ник'); }
+    else { if (d.photo) store.set('tgPhoto', d.photo); tgNick = tgNickFrom(d.name, d.username); accStep = 'nick'; toast('Telegram подключён. Осталось выбрать ник'); }
     renderAccount(); renderSettings(); if (sheetOpen !== 'sheetAccount') openSheet('sheetAccount');
   } catch (e){
     if (store.get('tgNonce', null)?.n !== p.n) return;           // an old code: leave the new attempt alone
-    // no connection or a gateway hiccup: just try again; the function's own failure (it keeps the code): up to 5 times
-    if (e.message === 'net' || e.message === 'server' || ++tgFails < 5) return;
+    // no connection: just try again. A server error (the server keeps the code): a few more times —
+    // longer for a bare 5xx, which may be a passing gateway hiccup while the player is still confirming
+    if (e.message === 'net' || ++tgFails < (e.message === 'server' ? 12 : 5)) return;
     tgFails = 0;
     tgStop('Вход не удался, попробуйте ещё раз');
   } finally { tgBusy = false; }
@@ -1549,7 +1547,7 @@ async function tgAppLogin(initData){
   if (me?.nick && me.tg && store.get('tgId', null) === id && store.get('sb.session', null)) return;   // already this player
   try {
     const d = await SRV.tgWebApp(initData); store.set('tgId', d.tg_id);
-    if (!SRV.me()?.nick){                                  // a new player: take the nick from Telegram
+    if (d.profile && !SRV.me()?.nick){                                  // a new player: take the nick from Telegram
       const base = tgNickFrom(d.name, d.username) || 'Охотник';
       for (const n of [base, base.slice(0, 13) + (10 + Math.random() * 89 | 0), 'Охотник' + (100 + Math.random() * 899 | 0)]){
         try { await SRV.setNick(n); break; } catch (e){ if (e.message !== 'taken') break; }
@@ -1565,7 +1563,7 @@ let accStep = 'nick', accConfirmDel = false, accBusy = false;
 const photoBlock = me => `<div class="avarow">${avaHTML(me?.id, me?.ava, me?.nick, 'ava2 avabig')}
   ${me?.nick ? `<div class="btns"><button type="button" data-a="photo">${me.ava ? 'Сменить фото' : 'Загрузить фото'}</button>${me.ava ? '<button type="button" data-a="nophoto">Убрать</button>' : ''}${me.tg ? '<button type="button" data-a="tgphoto">Из Telegram</button>' : ''}</div>
   <input type="file" id="avaFile" accept="image/*" hidden>` : '<p class="hintline" style="margin:0">Фото можно будет загрузить после выбора ника</p>'}</div>`;
-function openAccount(){ const me = SRV.me(); accStep = store.get('tgNonce', null) ? 'tgwait' : me?.nick ? 'manage' : 'nick'; accConfirmDel = false; renderAccount(); openSheet('sheetAccount'); SRV.refresh().then(() => { if (accStep === 'manage') renderAccount(); renderSettings(); }); }
+function openAccount(){ const me = SRV.me(); accStep = store.get('tgNonce', null) ? 'tgwait' : me?.nick ? 'manage' : 'nick'; accConfirmDel = false; renderAccount(); openSheet('sheetAccount'); SRV.refresh().then(me => { if (accStep === 'nick' && me?.nick) accStep = 'manage'; if (accStep === 'manage') renderAccount(); renderSettings(); }); }
 function renderAccount(){
   const me = SRV.me(), b = $('accBody');
   if (accStep === 'tgwait'){
@@ -1615,7 +1613,7 @@ $('accBody').addEventListener('click', async e => {
   if (a === 'tg'){ tgStart(); return; }
   if (a === 'tgagain'){ tgOpen(); return; }
   if (a === 'tgcancel'){ tgStop(); return; }
-  if (a === 'out'){ SRV.signOut(); tgNick = ''; closeSheets(); renderSettings(); toast('Вы вышли. Войти снова: ⚙️ → Общая таблица → Telegram'); return; }
+  if (a === 'out'){ SRV.signOut(); tgNick = ''; store.set('tgPhoto', null); closeSheets(); renderSettings(); toast('Вы вышли. Войти снова: ⚙️ → Общая таблица → Telegram'); return; }
   if (a === 'del'){ accConfirmDel = true; renderAccount(); }
   if (a === 'nodel'){ accConfirmDel = false; renderAccount(); }
   accBusy = true;
