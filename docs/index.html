@@ -1358,7 +1358,7 @@ const nickProblem = n => n.length < 3 || n.length > 16 || !NICK_RE.test(n) ? NIC
 const suggestNicks = () => { const a = ['Рыжий', 'Хитрый', 'Зоркий', 'Лесной', 'Меткий'], b = ['Лис', 'Следопыт', 'Охотник', 'Филин', 'Ёж']; return [0, 1, 2].map(() => pick(a) + pick(b) + (10 + Math.random() * 89 | 0)); };
 
 // ---------- sign in with Telegram: the bot links a one-time nonce to the player's Telegram ----------
-const TG_BOT = '';
+const TG_BOT = 'FoxHuntGameBot';
 let tgT = 0, tgNick = '';
 const tgNickFrom = (name, user) => {
   let n = normNick((name || '').replace(/[^A-Za-zА-Яа-яЁё0-9_\- ]/g, '')).slice(0, 16).trim();
