@@ -1390,7 +1390,7 @@ const SRV = (() => {
       const t = await token();
       const r = await go(URL + '/functions/v1/tg', { method: 'POST', headers: hdr(t), body: JSON.stringify({ action: 'webapp', initData }) });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok || d.status !== 'ok') throw new Error(d.error || 'server');
+      if (!r.ok || d.status !== 'ok') throw new Error((d.error || 'server') + (d.why ? ':' + d.why : ''));
       keep(d.session); setMe(null); await this.refresh(); return d;
     },
     async tgPoll(nonce){
@@ -1515,7 +1515,7 @@ async function tgAppLogin(initData){
     }
     renderSettings(); netStatsT = 0;
     if (SRV.me()?.nick) toast(`Привет, ${SRV.me().nick}! 🦊`); else openAccount();
-  } catch (e){ toast(e.message === 'initdata' ? 'Telegram не подтвердил вход. Закройте игру и откройте снова' : e.message === 'net' ? 'Нет связи с сервером' : 'Не получилось войти через Telegram (' + e.message + ')'); }
+  } catch (e){ toast(e.message.startsWith('initdata') ? 'Telegram не подтвердил вход (' + e.message.split(':')[1] + '). Закройте игру и откройте снова' : e.message === 'net' ? 'Нет связи с сервером' : 'Не получилось войти через Telegram (' + e.message + ')'); }
 }
 
 let accStep = 'nick', accConfirmDel = false, accBusy = false;

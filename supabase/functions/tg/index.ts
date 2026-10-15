@@ -13,8 +13,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
   ?? JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").default;
-const BOT = Deno.env.get("TG_BOT_TOKEN") ?? "";
-const SECRET = Deno.env.get("TG_SECRET") ?? "";
+const BOT = (Deno.env.get("TG_BOT_TOKEN") ?? "").trim();     // a pasted token often carries an invisible line break
+const SECRET = (Deno.env.get("TG_SECRET") ?? "").trim();
 const SITE = "https://fox-hunt.github.io/";
 
 const admin = () => createClient(SB_URL, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -61,17 +61,17 @@ async function hmac(key: ArrayBuffer | Uint8Array, data: string) {
   const k = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   return new Uint8Array(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(data)));
 }
-async function checkInitData(initData: string) {
+async function checkInitData(initData: string): Promise<{ user?: any; why?: string }> {
   const p = new URLSearchParams(initData);
   const hash = p.get("hash");
-  if (!hash) return null;
+  if (!hash) return { why: "nohash" };
   p.delete("hash");
   const check = [...p.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, v]) => `${k}=${v}`).join("\n");
   const secret = await hmac(new TextEncoder().encode("WebAppData"), BOT);
   const calc = [...await hmac(secret, check)].map((b) => b.toString(16).padStart(2, "0")).join("");
-  if (calc !== hash) return null;
-  if (Date.now() / 1000 - Number(p.get("auth_date") || 0) > 86400) return null;
-  try { return JSON.parse(p.get("user") || "null"); } catch { return null; }
+  if (calc !== hash) return { why: "hash" };
+  if (Date.now() / 1000 - Number(p.get("auth_date") || 0) > 86400) return { why: "old" };
+  try { return { user: JSON.parse(p.get("user") || "null") }; } catch { return { why: "user" }; }
 }
 
 // find (or create, or attach to the caller's nick) the player for this Telegram account and open a session
@@ -159,8 +159,9 @@ Deno.serve(async (req) => {
   if (req.method === "POST") {
     const body = await req.json().catch(() => ({}));
     if (body.action === "webapp") {                       // opened inside Telegram: sign in at once
-      const u = await checkInitData(String(body.initData || ""));
-      if (!u?.id) return json({ error: "initdata" }, 401);
+      const chk = await checkInitData(String(body.initData || ""));
+      const u = chk.user;
+      if (!u?.id) return json({ error: "initdata", why: chk.why ?? "user" }, 401);
       const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || null;
       return await loginAs(u.id, name, u.username ?? null, await userOf(req));
     }
