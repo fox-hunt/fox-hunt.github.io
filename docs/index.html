@@ -546,6 +546,12 @@ html.in-tg [data-a="out"],html.in-tg [data-a="tg"],html.in-tg .authbtn[data-a="t
   .app{padding-block:10px 104px}
   /* short screens (Telegram on a computer, landscape): shrink the board so the hint stays above the toolbar */
   .boardcard{width:min(100%,var(--bw,470px),max(280px,calc(100dvh - 400px - var(--tgtop,0px))))}
+  /* Telegram full screen: title and buttons in one row, so the board keeps its size */
+  html.tg-full header{grid-template-areas:"title btns";padding-top:0}
+  html.tg-full header .eyebrow{display:none}
+  html.tg-full header h1{font-size:clamp(24px,7.4vw,32px)}
+  html.tg-full .app{padding-top:calc(var(--tgtop) + 4px)}
+  html.tg-full .boardcard{width:min(100%,var(--bw,470px),max(280px,calc(100dvh - 346px - var(--tgtop,0px))))}
 }
 </style>
 
@@ -1952,8 +1958,7 @@ let statPeriod = store.get('statPeriod', 'month');
 // ---------- fireworks over the board ----------
 function fireworks(area){
   if (calm()) return;
-  const c = $('fx'), x = c.getContext('2d'), dpr = Math.min(devicePixelRatio || 1, 2);
-  c.width = innerWidth * dpr; c.height = innerHeight * dpr; x.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const c = $('fx'), x = c.getContext('2d'), dpr = Math.min(devicePixelRatio || 1, 2), [W, H] = fitCanvas(c, x, dpr);
   const cols = ['#ffd257', '#ff7a1a', '#ff4d6d', '#3ee0a8', '#6cb2ff', '#ffffff', '#c58bff'];
   const sparks = [], small = innerWidth < 600, size = Math.min(area.width, area.height);
   for (let b = 0; b < 5; b++){
@@ -1968,7 +1973,7 @@ function fireworks(area){
   let t = 0;
   (function f(){
     x.globalCompositeOperation = 'source-over';
-    x.clearRect(0, 0, innerWidth, innerHeight);
+    x.clearRect(0, 0, W, H);
     x.globalCompositeOperation = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches) ? 'lighter' : 'source-over';
     let alive = 0;
     for (const p of sparks){
@@ -1980,7 +1985,7 @@ function fireworks(area){
       x.beginPath(); x.moveTo(p.px - p.vx * 2.2, p.py - p.vy * 2.2); x.lineTo(p.x, p.y); x.stroke();
     }
     x.globalAlpha = 1;
-    if (++t < 200 && alive) requestAnimationFrame(f); else x.clearRect(0, 0, innerWidth, innerHeight);
+    if (++t < 200 && alive) requestAnimationFrame(f); else c.width = c.width;
   })();
 }
 
@@ -2032,19 +2037,23 @@ function tgWhere(){
  
 
 // ---------- confetti ----------
+function fitCanvas(c, x, dpr){
+  const r = c.getBoundingClientRect(), W = r.width || innerWidth, H = r.height || innerHeight;
+  c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); x.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return [W, H];
+}
 function confetti(n = 140){
   if (calm()) return;
-  const c = $('confetti'), x = c.getContext('2d'), dpr = devicePixelRatio || 1;
-  c.width = innerWidth * dpr; c.height = innerHeight * dpr; x.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const c = $('confetti'), x = c.getContext('2d'), dpr = Math.min(devicePixelRatio || 1, 2), [W, H] = fitCanvas(c, x, dpr);
   const cols = ['#ff7a1a', '#ff4d2e', '#ffd257', '#3ee0a8', '#6cb2ff', '#ffffff'];
-  const P = Array.from({ length: n }, () => ({ x: innerWidth / 2, y: innerHeight * .45, vx: (Math.random() - .5) * 16, vy: -Math.random() * 16 - 4,
+  const P = Array.from({ length: n }, () => ({ x: W / 2, y: H * .45, vx: (Math.random() - .5) * 16, vy: -Math.random() * 16 - 4,
     s: 5 + Math.random() * 6, r: Math.random() * 6, vr: (Math.random() - .5) * .4, c: cols[Math.random() * cols.length | 0] }));
   let t = 0;
   (function f(){
-    x.clearRect(0, 0, innerWidth, innerHeight);
+    x.clearRect(0, 0, W, H);
     P.forEach(p => { p.vy += .42; p.vx *= .985; p.x += p.vx; p.y += p.vy; p.r += p.vr;
       x.save(); x.translate(p.x, p.y); x.rotate(p.r); x.fillStyle = p.c; x.globalAlpha = Math.max(0, 1 - t / 150); x.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); x.restore(); });
-    if (++t < 150) requestAnimationFrame(f); else x.clearRect(0, 0, innerWidth, innerHeight);
+    if (++t < 150) requestAnimationFrame(f); else c.width = c.width;
   })();
 }
 
