@@ -19,6 +19,11 @@ const SITE = "https://fox-hunt.github.io/";
 const PUBLISHABLE = "sb_publishable_sSBwofwoUVYgoqhHx1GVUA_9Dts6BHr";   // public key: the bot reads the day table like any visitor
 const LEVELS: [string, string][] = [["kid", "🐾 Лисёнок"], ["classic", "🌲 Классика"], ["pro", "🏔 Профи"]];
 const PLAY = { inline_keyboard: [[{ text: "🦊 Играть", web_app: { url: SITE } }]] };
+const MENU = { inline_keyboard: [
+  [{ text: "🦊 Играть", web_app: { url: SITE } }],
+  [{ text: "🏆 Таблица дня", callback_data: "top" }, { text: "❓ Как играть", callback_data: "help" }],
+  [{ text: "🧹 Очистить чат", callback_data: "clear" }],
+] };
 const fmtMs = (ms: number) => { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 const moves = (n: number) => n % 10 === 1 && n % 100 !== 11 ? "ход" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "хода" : "ходов";
 
@@ -143,6 +148,27 @@ async function loginAs(tgId: number, tgName: string | null, tgUser: string | nul
   });
 }
 
+async function botCommand(cmd: string, chat: number, lastId: number) {
+  if (cmd === "top") {
+    await tg("sendMessage", { chat_id: chat, text: await dayTop(), reply_markup: MENU });
+  } else if (cmd === "help") {
+    await tg("sendMessage", { chat_id: chat, text: HELP, reply_markup: MENU, link_preview_options: { is_disabled: true } });
+  } else if (cmd === "clear") {
+    // bots may delete messages of the last 48 hours in a private chat; ids there go one after another
+    for (let to = lastId; to > 0 && to > lastId - 1000; to -= 100) {
+      const ids = Array.from({ length: Math.min(100, to) }, (_, i) => to - i);
+      await tg("deleteMessages", { chat_id: chat, message_ids: ids });
+    }
+    await tg("sendMessage", { chat_id: chat, text: "🧹 Чат очищен. Сообщения старше 48 часов Telegram удалить боту не даёт: их можно убрать через «Очистить историю» в меню чата.", reply_markup: MENU });
+  } else {
+    await tg("sendMessage", {
+      chat_id: chat,
+      text: "Привет! Я бот игры «Охота на лис» 🦊\nНажмите «Играть», и игра откроется прямо здесь. Вход и общая таблица — автоматически.",
+      reply_markup: MENU,
+    });
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const url = new URL(req.url);
@@ -150,7 +176,7 @@ Deno.serve(async (req) => {
   // one-time setup from the browser: …/functions/v1/tg?setup=<TG_SECRET>
   if (req.method === "GET") {
     if (!SECRET || url.searchParams.get("setup") !== SECRET) return json({ error: "not found" }, 404);
-    const hook = await tg("setWebhook", { url: `${SB_URL}/functions/v1/tg`, secret_token: SECRET, allowed_updates: ["message"] });
+    const hook = await tg("setWebhook", { url: `${SB_URL}/functions/v1/tg`, secret_token: SECRET, allowed_updates: ["message", "callback_query"] });
     const menu = await tg("setChatMenuButton", { menu_button: { type: "web_app", text: "Играть", web_app: { url: SITE } } });
     const cmds = await tg("setMyCommands", { commands: [
       { command: "play", description: "Открыть игру" },
@@ -167,6 +193,12 @@ Deno.serve(async (req) => {
   // Telegram webhook
   if (SECRET && req.headers.get("x-telegram-bot-api-secret-token") === SECRET) {
     const u = await req.json().catch(() => ({}));
+    const cq = u?.callback_query;
+    if (cq?.message) {                                     // a button under a bot message
+      await tg("answerCallbackQuery", { callback_query_id: cq.id });
+      await botCommand(String(cq.data || ""), cq.message.chat.id, cq.message.message_id);
+      return json({ ok: true });
+    }
     const m = u?.message;
     if (!m?.text || !m.from) return json({ ok: true });
     const start = m.text.match(/^\/start\s+([a-f0-9]{32})\s*$/);
@@ -181,25 +213,7 @@ Deno.serve(async (req) => {
         text: "✅ Готово! Вернитесь в игру «Охота на лис», вход выполнится сам.\n\nНа iPhone: «◀ Safari» в левом верхнем углу.",
       });
     } else {
-      const cmd = (m.text.match(/^\/(\w+)/)?.[1] ?? "").toLowerCase();
-      if (cmd === "top") {
-        await tg("sendMessage", { chat_id: m.chat.id, text: await dayTop(), reply_markup: PLAY });
-      } else if (cmd === "help") {
-        await tg("sendMessage", { chat_id: m.chat.id, text: HELP, reply_markup: PLAY, link_preview_options: { is_disabled: true } });
-      } else if (cmd === "clear") {
-        // bots may delete messages of the last 48 hours in a private chat; ids there go one after another
-        for (let to = m.message_id; to > 0 && to > m.message_id - 1000; to -= 100) {
-          const ids = Array.from({ length: Math.min(100, to) }, (_, i) => to - i);
-          await tg("deleteMessages", { chat_id: m.chat.id, message_ids: ids });
-        }
-        await tg("sendMessage", { chat_id: m.chat.id, text: "🧹 Чат очищен. Сообщения старше 48 часов Telegram удалить боту не даёт: их можно убрать через «Очистить историю» в меню чата.", reply_markup: PLAY });
-      } else {
-        await tg("sendMessage", {
-          chat_id: m.chat.id,
-          text: "Привет! Я бот игры «Охота на лис» 🦊\nНажмите «Играть», и игра откроется прямо здесь. Вход и общая таблица — автоматически.\n\n🏆 /top — таблица игры дня\n❓ /help — как играть",
-          reply_markup: PLAY,
-        });
-      }
+      await botCommand((m.text.match(/^\/(\w+)/)?.[1] ?? "").toLowerCase(), m.chat.id, m.message_id);
     }
     return json({ ok: true });
   }
