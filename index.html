@@ -1393,6 +1393,10 @@ const SRV = (() => {
       if (!r.ok || d.status !== 'ok') throw new Error((d.error || 'server') + (d.why ? ':' + d.why : ''));
       keep(d.session); setMe(null); await this.refresh(); return d;
     },
+    async tgHandoff(initData, nonce){
+      const r = await go(URL + '/functions/v1/tg', { method: 'POST', headers: hdr(), body: JSON.stringify({ action: 'handoff', initData, nonce }) });
+      return r.ok;
+    },
     async tgPoll(nonce){
       const t = await token();
       const r = await go(URL + '/functions/v1/tg', { method: 'POST', headers: hdr(t), body: JSON.stringify({ nonce }) });
@@ -1480,6 +1484,8 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && st
 
 // ---------- inside Telegram (Mini App): full screen, no swipe-to-close, automatic sign-in ----------
 let TGW = null, inTG = false;
+{ const m = location.hash.match(/(?:^#|&)login=([a-f0-9]{32})/);       // came from the Mini App: sign in as the same player
+  if (m){ store.set('tgNonce', { n: m[1], at: Date.now() }); try { history.replaceState(null, '', location.pathname + location.search); } catch {} } }
 const tgHashData = () => { try { const h = location.hash.slice(1) || sessionStorage.getItem('tgHash') || ''; return new URLSearchParams(h.replace(/^#/, '')).get('tgWebAppData') || ''; } catch { return ''; } };
 { // Telegram announces itself differently on iPhone / Android / Mac / desktop / web
   try { if (/tgWebAppData=/.test(location.hash)) sessionStorage.setItem('tgHash', location.hash); } catch {}
@@ -1981,7 +1987,14 @@ function tgWhere(){
   };
   // where to play: Telegram ↔ browser, one account
   tgWhere();
-  $('playWeb').onclick = () => { try { TGW.openLink('https://fox-hunt.github.io/'); } catch { open('https://fox-hunt.github.io/', '_blank'); } };
+  $('playWeb').onclick = async () => {
+    let url = 'https://fox-hunt.github.io/';
+    try {
+      const n = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
+      if (await SRV.tgHandoff(TGW?.initData || tgHashData(), n)) url += '#login=' + n;
+    } catch {}
+    try { TGW.openLink(url); } catch { open(url, '_blank'); }
+  };
 })();
  
 

@@ -16,6 +16,33 @@ const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
 const BOT = (Deno.env.get("TG_BOT_TOKEN") ?? "").trim();     // a pasted token often carries an invisible line break
 const SECRET = (Deno.env.get("TG_SECRET") ?? "").trim();
 const SITE = "https://fox-hunt.github.io/";
+const PUBLISHABLE = "sb_publishable_sSBwofwoUVYgoqhHx1GVUA_9Dts6BHr";   // public key: the bot reads the day table like any visitor
+const LEVELS: [string, string][] = [["kid", "🐾 Лисёнок"], ["classic", "🌲 Классика"], ["pro", "🏔 Профи"]];
+const PLAY = { inline_keyboard: [[{ text: "🦊 Играть", web_app: { url: SITE } }]] };
+const fmtMs = (ms: number) => { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+const moves = (n: number) => n % 10 === 1 && n % 100 !== 11 ? "ход" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "хода" : "ходов";
+
+async function dayTop(): Promise<string> {
+  const day = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);       // the day as in Moscow
+  const medal = ["🥇", "🥈", "🥉", "4.", "5."];
+  let out = `🏆 Игра дня, ${day.split("-").reverse().join(".")}\n`;
+  for (const [lv, name] of LEVELS) {
+    const b = await fetch(`${SB_URL}/rest/v1/rpc/day_board`, {
+      method: "POST", headers: { apikey: PUBLISHABLE, "Content-Type": "application/json" },
+      body: JSON.stringify({ p_level: lv, p_day: day }),
+    }).then((r) => r.json()).catch(() => null);
+    out += `\n${name}` + (b?.total ? ` · игроков: ${b.total}\n` : "\nпока никто не прошёл\n");
+    for (const [i, row] of (b?.rows ?? []).slice(0, 5).entries())
+      out += `${medal[i]} ${row.nick} — ${row.moves} ${moves(row.moves)}, ${fmtMs(row.ms)}${row.streak >= 2 ? ` 🔥${row.streak}` : ""}\n`;
+  }
+  return out + "\nСыграйте сегодняшнюю игру и попадите в таблицу 👇";
+}
+
+const HELP = "🦊 «Охота на лис» — логическая игра по мотивам журнала «Наука и жизнь» 1985 года.\n\n" +
+  "В лесу прячутся лисы. Нажмите на дерево: если там лиса — она найдена, если нет — цифра покажет, " +
+  "сколько лис на той же горизонтали, вертикали и диагоналях. Найдите всех лис за как можно меньше ходов.\n\n" +
+  "📅 Игра дня — одна расстановка для всех, в общую таблицу идёт первая попытка.\n" +
+  "🏆 /top — таблица игры дня\n🧹 /clear — очистить переписку\n\nИграть можно здесь или в браузере: " + SITE;
 
 const admin = () => createClient(SB_URL, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } });
 const db = admin();
@@ -125,8 +152,16 @@ Deno.serve(async (req) => {
     if (!SECRET || url.searchParams.get("setup") !== SECRET) return json({ error: "not found" }, 404);
     const hook = await tg("setWebhook", { url: `${SB_URL}/functions/v1/tg`, secret_token: SECRET, allowed_updates: ["message"] });
     const menu = await tg("setChatMenuButton", { menu_button: { type: "web_app", text: "Играть", web_app: { url: SITE } } });
+    const cmds = await tg("setMyCommands", { commands: [
+      { command: "play", description: "Открыть игру" },
+      { command: "top", description: "Таблица игры дня" },
+      { command: "help", description: "Как играть" },
+      { command: "clear", description: "Очистить переписку с ботом" },
+    ] });
+    await tg("setMyDescription", { description: "🦊 Логическая игра «Охота на лис»: найдите лис в лесу по пеленгу.\n\nИгра дня — одна расстановка для всех, общая таблица, серии и значки. Нажмите «Играть»!" });
+    await tg("setMyShortDescription", { short_description: "Логическая игра «Охота на лис» 🦊 Игра дня, общая таблица и значки" });
     const me = await tg("getMe", {});
-    return json({ webhook: hook, menu, bot: me?.result?.username });
+    return json({ webhook: hook, menu, commands: cmds, bot: me?.result?.username });
   }
 
   // Telegram webhook
@@ -146,11 +181,25 @@ Deno.serve(async (req) => {
         text: "✅ Готово! Вернитесь в игру «Охота на лис», вход выполнится сам.\n\nНа iPhone: «◀ Safari» в левом верхнем углу.",
       });
     } else {
-      await tg("sendMessage", {
-        chat_id: m.chat.id,
-        text: "Привет! Я бот игры «Охота на лис» 🦊\nНажмите «Играть», и игра откроется прямо здесь. Вход и общая таблица — автоматически.",
-        reply_markup: { inline_keyboard: [[{ text: "🦊 Играть", web_app: { url: SITE } }]] },
-      });
+      const cmd = (m.text.match(/^\/(\w+)/)?.[1] ?? "").toLowerCase();
+      if (cmd === "top") {
+        await tg("sendMessage", { chat_id: m.chat.id, text: await dayTop(), reply_markup: PLAY });
+      } else if (cmd === "help") {
+        await tg("sendMessage", { chat_id: m.chat.id, text: HELP, reply_markup: PLAY, link_preview_options: { is_disabled: true } });
+      } else if (cmd === "clear") {
+        // bots may delete messages of the last 48 hours in a private chat; ids there go one after another
+        for (let to = m.message_id; to > 0 && to > m.message_id - 1000; to -= 100) {
+          const ids = Array.from({ length: Math.min(100, to) }, (_, i) => to - i);
+          await tg("deleteMessages", { chat_id: m.chat.id, message_ids: ids });
+        }
+        await tg("sendMessage", { chat_id: m.chat.id, text: "🧹 Чат очищен. Сообщения старше 48 часов Telegram удалить боту не даёт: их можно убрать через «Очистить историю» в меню чата.", reply_markup: PLAY });
+      } else {
+        await tg("sendMessage", {
+          chat_id: m.chat.id,
+          text: "Привет! Я бот игры «Охота на лис» 🦊\nНажмите «Играть», и игра откроется прямо здесь. Вход и общая таблица — автоматически.\n\n🏆 /top — таблица игры дня\n❓ /help — как играть",
+          reply_markup: PLAY,
+        });
+      }
     }
     return json({ ok: true });
   }
@@ -164,6 +213,16 @@ Deno.serve(async (req) => {
       if (!u?.id) return json({ error: "initdata", why: chk.why ?? "user" }, 401);
       const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || null;
       return await loginAs(u.id, name, u.username ?? null, await userOf(req));
+    }
+    if (body.action === "handoff") {                      // Mini App → browser: a one-time login for the same Telegram account
+      const chk = await checkInitData(String(body.initData || ""));
+      const u = chk.user;
+      if (!u?.id || !/^[a-f0-9]{32}$/.test(body.nonce ?? "")) return json({ error: "initdata", why: chk.why ?? "nonce" }, 401);
+      await db.from("tg_logins").upsert({
+        nonce: body.nonce, tg_id: u.id,
+        tg_name: [u.first_name, u.last_name].filter(Boolean).join(" ") || null, tg_user: u.username ?? null,
+      });
+      return json({ ok: true });
     }
     if (body.action === "photo") {
       const uid = (await userOf(req))?.id;
