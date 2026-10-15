@@ -367,6 +367,8 @@ html.calm *,html.calm *::before,html.calm *::after{animation:none!important;tran
 .row .ri{font-size:22px;width:30px;text-align:center;flex:none}
 .row .ri svg{width:26px;height:26px;display:block;margin:auto}
 a.row{color:inherit;text-decoration:none}
+html.tg-full{--tgtop:calc(var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px))}
+html.tg-full .app{padding-top:calc(var(--tgtop) + 10px)}
 html.in-tg [data-a="out"],html.in-tg [data-a="tg"],html.in-tg .authbtn[data-a="tg"]+.or{display:none}
 .authbtn .lg svg{width:24px;height:24px;display:block}
 .row.radio .mark{width:24px;height:24px;border-radius:50%;border:2px solid var(--fg-3);flex:none;display:grid;place-items:center}
@@ -523,6 +525,8 @@ html.in-tg [data-a="out"],html.in-tg [data-a="tg"],html.in-tg .authbtn[data-a="t
   .dock{bottom:calc(32px + env(safe-area-inset-bottom,0px))}
   .dockcap{display:block;position:fixed;left:0;right:0;z-index:5;bottom:calc(8px + env(safe-area-inset-bottom,0px));text-align:center;font-size:12.5px;font-weight:600;color:var(--fg-2);pointer-events:none}
   .app{padding-block:10px 104px}
+  /* short screens (Telegram on a computer, landscape): shrink the board so the hint stays above the toolbar */
+  .boardcard{width:min(100%,var(--bw,470px),max(280px,calc(100dvh - 400px - var(--tgtop,0px))))}
 }
 </style>
 
@@ -1505,6 +1509,8 @@ function tgApp(){
   if (!initData) return;                                      // an ordinary page in a frame, not a Mini App
   inTG = true; document.documentElement.classList.add('in-tg'); tgWhere();
   try { TGW?.ready(); TGW?.expand(); TGW?.disableVerticalSwipes?.(); } catch {}
+  // on a phone: the whole screen, Telegram's own bar hidden (its close / menu buttons float over the top)
+  try { if (['ios', 'android'].includes(TGW?.platform) && TGW.isVersionAtLeast?.('8.0')){ TGW.requestFullscreen(); document.documentElement.classList.add('tg-full'); } } catch {}
   tgAppLogin(initData);
 }
 async function tgAppLogin(initData){
