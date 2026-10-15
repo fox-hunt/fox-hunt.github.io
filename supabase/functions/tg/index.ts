@@ -86,9 +86,22 @@ Deno.serve(async (req) => {
     return json({ ok: true });
   }
 
-  // the game polls: { nonce }
+  // the game: { action: "photo" } — take the avatar from Telegram again; otherwise { nonce } — poll a login
   if (req.method === "POST") {
-    const { nonce } = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({}));
+    if (body.action === "photo") {
+      const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+      const { data } = bearer.split(".").length === 3 ? await db.auth.getUser(bearer) : { data: null };
+      const uid = data?.user?.id;
+      if (!uid) return json({ error: "auth" }, 401);
+      const { data: link } = await db.from("tg_links").select("tg_id").eq("user_id", uid).maybeSingle();
+      if (!link) return json({ error: "notg" }, 400);
+      const photo = await copyPhoto(link.tg_id, uid);
+      if (!photo) return json({ error: "nophoto" }, 404);
+      await db.from("profiles").update({ avatar_v: photo }).eq("id", uid);
+      return json({ photo });
+    }
+    const { nonce } = body;
     if (!/^[a-f0-9]{32}$/.test(nonce ?? "")) return json({ error: "bad" }, 400);
     const { data: L } = await db.from("tg_logins").select("*").eq("nonce", nonce).maybeSingle();
     if (!L) return json({ status: "wait" });

@@ -357,6 +357,8 @@ html.calm *,html.calm *::before,html.calm *::after{animation:none!important;tran
 .row .rt b{font-size:16px;font-weight:600}
 .row .rt span{font-size:13px;color:var(--fg-2);line-height:1.35}
 .row .ri{font-size:22px;width:30px;text-align:center;flex:none}
+.row .ri svg{width:26px;height:26px;display:block;margin:auto}
+.authbtn .lg svg{width:24px;height:24px;display:block}
 .row.radio .mark{width:24px;height:24px;border-radius:50%;border:2px solid var(--fg-3);flex:none;display:grid;place-items:center}
 .row.radio[aria-checked="true"] .mark{border-color:var(--accent);background:var(--accent)}
 .row.radio[aria-checked="true"] .mark::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--accent-ink)}
@@ -1310,6 +1312,13 @@ const SRV = (() => {
     myStats: () => rpc('my_stats'),
     setAvatarV: async v => { await rpc('set_avatar', { p_v: v }); return setMe({ ...store.get('acc.profile', null), ava: v }); },
     signOut(){ drop(); },
+    async tgPhoto(){
+      const t = await token();
+      const r = await go(URL + '/functions/v1/tg', { method: 'POST', headers: hdr(t), body: JSON.stringify({ action: 'photo' }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'server');
+      return setMe({ ...store.get('acc.profile', null), ava: d.photo });
+    },
     async tgPoll(nonce){
       const t = await token();
       const r = await go(URL + '/functions/v1/tg', { method: 'POST', headers: hdr(t), body: JSON.stringify({ nonce }) });
@@ -1359,6 +1368,7 @@ const suggestNicks = () => { const a = ['Рыжий', 'Хитрый', 'Зорк�
 
 // ---------- sign in with Telegram: the bot links a one-time nonce to the player's Telegram ----------
 const TG_BOT = 'FoxHuntGameBot';
+const TG_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#2aabee"/><path fill="#fff" d="M5.43 11.87l11.57-4.46c.54-.19 1 .13.83.94l-1.97 9.28c-.15.66-.54.82-1.09.51l-3-2.21-1.45 1.39c-.16.16-.29.29-.6.29l.21-3.05 5.56-5.02c.24-.21-.05-.33-.38-.12l-6.87 4.33-2.96-.92c-.64-.2-.66-.64.14-.96z"/></svg>';
 let tgT = 0, tgNick = '';
 const tgNickFrom = (name, user) => {
   let n = normNick((name || '').replace(/[^A-Za-zА-Яа-яЁё0-9_\- ]/g, '')).slice(0, 16).trim();
@@ -1394,7 +1404,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && st
 
 let accStep = 'nick', accConfirmDel = false, accBusy = false;
 const photoBlock = me => `<div class="avarow">${avaHTML(me?.id, me?.ava, me?.nick, 'ava2 avabig')}
-  ${me?.nick ? `<div class="btns"><button type="button" data-a="photo">${me.ava ? 'Сменить фото' : 'Загрузить фото'}</button>${me.ava ? '<button type="button" data-a="nophoto">Убрать</button>' : ''}</div>
+  ${me?.nick ? `<div class="btns"><button type="button" data-a="photo">${me.ava ? 'Сменить фото' : 'Загрузить фото'}</button>${me.ava ? '<button type="button" data-a="nophoto">Убрать</button>' : ''}${me.tg ? '<button type="button" data-a="tgphoto">Из Telegram</button>' : ''}</div>
   <input type="file" id="avaFile" accept="image/*" hidden>` : '<p class="hintline" style="margin:0">Фото можно будет загрузить после выбора ника</p>'}</div>`;
 function openAccount(){ const me = SRV.me(); accStep = me?.nick ? 'manage' : 'nick'; accConfirmDel = false; renderAccount(); openSheet('sheetAccount'); SRV.refresh().then(() => { if (accStep === 'manage') renderAccount(); renderSettings(); }); }
 function renderAccount(){
@@ -1403,7 +1413,7 @@ function renderAccount(){
     const sug = suggestNicks();
     $('accT').textContent = me?.nick ? 'Ваш ник' : 'Общая таблица';
     $('accSub').textContent = me?.nick ? 'Так вас видят в таблицах рекордов.' : TG_BOT ? 'Войдите через Telegram: рейтинг сохранится на любом устройстве. Или просто придумайте ник.' : 'Придумайте ник, и ваши игры дня попадут в общую таблицу. Почту и пароль не спрашиваем.';
-    const tgBtn = TG_BOT && !me?.nick && !me?.tg ? `<button class="authbtn" data-a="tg"><span class="lg" style="background:#2aabee">✈︎</span>Войти через Telegram</button><div class="or">или просто придумайте ник</div>` : '';
+    const tgBtn = TG_BOT && !me?.nick && !me?.tg ? `<button class="authbtn" data-a="tg"><span class="lg">${TG_ICON}</span>Войти через Telegram</button><div class="or">или просто придумайте ник</div>` : '';
     b.innerHTML = `${tgBtn}${me?.nick ? photoBlock(me) : ''}<form class="body" id="nickForm" style="margin:0;gap:10px"><div class="field"><input id="accNick" maxlength="20" autocomplete="nickname" placeholder="Например, ${sug[0]}" value="${esc(me?.nick || tgNick || '')}" required></div>
       <p class="hintline" id="nickHint">${NICK_RULE}</p>
       <div class="chips">${sug.map(n => `<button type="button" data-n="${n}">${n}</button>`).join('')}</div>
@@ -1418,9 +1428,9 @@ function renderAccount(){
         <button class="row" data-a="nick"><span class="ri">✏️</span><span class="rt"><b>${esc(me.nick)}</b><span>Изменить ник и фото</span></span><span class="chev">›</span></button>
         <button class="row" role="switch" data-a="public" aria-checked="${me.public}"><span class="ri">🏆</span><span class="rt"><b>Показывать мои рекорды всем</b><span>${me.public ? 'Вы есть в общей таблице' : 'Другие игроки вас не видят'}</span></span><i class="switch"></i></button>
       </div>
-      ${me.tg ? `<div class="group"><div class="row"><span class="ri">✈️</span><span class="rt"><b>Telegram ${esc(me.tg)}</b><span>Входите с любого устройства</span></span></div>
+      ${me.tg ? `<div class="group"><div class="row"><span class="ri">${TG_ICON}</span><span class="rt"><b>Telegram ${esc(me.tg)}</b><span>Входите с любого устройства</span></span></div>
         <button class="row" data-a="out"><span class="ri">↩︎</span><span class="rt"><b>Выйти</b><span>Вернуться можно через Telegram</span></span></button></div>`
-        : TG_BOT ? `<div class="group"><button class="row" data-a="tg"><span class="ri">✈️</span><span class="rt"><b>Привязать Telegram</b><span>Чтобы не потерять рейтинг и входить с других устройств</span></span><span class="chev">›</span></button></div>` : ''}
+        : TG_BOT ? `<div class="group"><button class="row" data-a="tg"><span class="ri">${TG_ICON}</span><span class="rt"><b>Привязать Telegram</b><span>Чтобы не потерять рейтинг и входить с других устройств</span></span><span class="chev">›</span></button></div>` : ''}
       <div class="group">
         ${accConfirmDel ? `<div class="row danger-row" style="flex-wrap:wrap"><span class="rt"><b>Удалить аккаунт?</b><span>Ник и результаты в общей таблице исчезнут навсегда. Рекорды на этом устройстве останутся.</span></span>
           <div class="clear" style="width:100%"><button class="danger" data-a="del2">Удалить</button><button data-a="nodel">Отмена</button></div></div>`
@@ -1442,6 +1452,7 @@ $('accBody').addEventListener('click', async e => {
   accBusy = true;
   try {
     if (a === 'public'){ await SRV.setPublic(!me.public); renderAccount(); renderSettings(); toast(!me.public ? 'Ваши рекорды видны всем' : 'Вы скрыты из общей таблицы'); }
+    if (a === 'tgphoto'){ toast('Берём фото из Telegram…'); try { await SRV.tgPhoto(); renderAccount(); renderSettings(); toast('Фото из Telegram установлено'); } catch (err){ toast(err.message === 'nophoto' ? 'В Telegram нет фото или оно скрыто настройками приватности' : 'Не получилось взять фото'); } }
     if (a === 'nophoto'){ await SRV.removeAvatar(); renderAccount(); renderSettings(); toast('Фото убрано'); }
     if (a === 'unfriend'){ await SRV.removeFriend(t.dataset.id); renderAccount(); toast('Удалено из друзей'); }
     if (a === 'del2'){ await SRV.deleteAccount(); closeSheets(); renderSettings(); toast('Аккаунт удалён'); }
