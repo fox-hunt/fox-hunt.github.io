@@ -1,7 +1,7 @@
 #!/bin/sh
 # Builds the installable web app into ./docs from index.html (game) and ./assets (icons).
 # ./docs is what gets published (GitHub Pages) and what the local server shows.
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 1
 rm -rf docs && mkdir -p docs/icons
 cp assets/icon-180.png assets/icon-192.png assets/icon-512.png assets/icon-maskable-512.png docs/icons/
 cp assets/icon-round.svg docs/icons/favicon.svg

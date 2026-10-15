@@ -34,14 +34,15 @@ async function dayTop(): Promise<string> {
   const day = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);       // the day as in Moscow
   const medal = ["🥇", "🥈", "🥉", "4.", "5."];
   let out = `🏆 Игра дня, ${day.split("-").reverse().join(".")}\n`;
-  for (const [lv, name] of LEVELS) {
-    const b = await fetch(`${SB_URL}/rest/v1/rpc/day_board`, {
-      method: "POST", headers: { apikey: PUBLISHABLE, "Content-Type": "application/json" },
-      body: JSON.stringify({ p_level: lv, p_day: day }),
-    }).then((r) => r.json()).catch(() => null);
-    out += `\n${name}` + (b?.total ? ` · игроков: ${b.total}\n` : "\nпока никто не прошёл\n");
-    for (const [i, row] of (b?.rows ?? []).slice(0, 5).entries())
-      out += `${medal[i]} ${row.nick} — ${row.moves} ${moves(row.moves)}, ${fmtMs(row.ms)}${row.streak >= 2 ? ` 🔥${row.streak}` : ""}\n`;
+  const boards = await Promise.all(LEVELS.map(([lv]) => fetch(`${SB_URL}/rest/v1/rpc/day_board`, {
+    method: "POST", headers: { apikey: PUBLISHABLE, "Content-Type": "application/json" },
+    body: JSON.stringify({ p_level: lv, p_day: day }),
+  }).then((r) => (r.ok ? r.json() : null)).catch(() => null)));
+  for (const [i, [, name]] of LEVELS.entries()) {
+    const b = boards[i];
+    out += `\n${name}` + (!b ? "\nне удалось загрузить, попробуйте позже\n" : b.total ? ` · игроков: ${b.total}\n` : "\nпока никто не прошёл\n");
+    for (const [j, row] of (b?.rows ?? []).slice(0, 5).entries())
+      out += `${medal[j]} ${row.nick} — ${row.moves} ${moves(row.moves)}, ${fmtMs(row.ms)}${row.streak >= 2 ? ` 🔥${row.streak}` : ""}\n`;
   }
   return out + "\nСыграйте сегодняшнюю игру и попадите в таблицу 👇";
 }
@@ -51,6 +52,15 @@ const HELP = "🦊 «Охота на лис» — логическая игра 
   "сколько лис на той же горизонтали, вертикали и диагоналях. Найдите всех лис за как можно меньше ходов.\n\n" +
   "📅 Игра дня — одна расстановка для всех, в общую таблицу идёт первая попытка.\n" +
   "🏆 /top — таблица игры дня\n🧹 /clear — очистить переписку\n\nИграть можно здесь или в браузере: " + SITE;
+
+const NONCE = /^[a-f0-9]{32}$/;
+const nameOf = (u: { first_name?: string; last_name?: string }) => [u.first_name, u.last_name].filter(Boolean).join(" ") || null;
+// a confirmed sign-in code: the poll from the game turns it into a session (old ones are cleared on the way)
+async function saveLogin(nonce: string, u: { id: number; first_name?: string; last_name?: string; username?: string }, at = new Date()) {
+  await db.from("tg_logins").delete().lt("created_at", new Date(Date.now() - 864e5).toISOString());
+  const { error } = await db.from("tg_logins").upsert({ nonce, tg_id: u.id, tg_name: nameOf(u), tg_user: u.username ?? null, created_at: at.toISOString() });
+  return !error;
+}
 
 const admin = () => createClient(SB_URL, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } });
 const db = admin();
@@ -114,19 +124,28 @@ async function loginAs(tgId: number, tgName: string | null, tgUser: string | nul
   const email = `tg${tgId}@fox-hunt.github.io`;
   const { data: link } = await db.from("tg_links").select("user_id").eq("tg_id", tgId).maybeSingle();
   let uid: string | undefined = link?.user_id;
-  let linked = false;
   if (!uid) {
-    if (caller && !caller.email) {
-      uid = caller.id;                                      // keep this device's nick and results
-      const { error } = await db.auth.admin.updateUserById(uid, { email, email_confirm: true });
-      if (error) return json({ error: "link" }, 500);
-    } else {
-      const { data: c, error } = await db.auth.admin.createUser({ email, email_confirm: true });
-      if (error || !c.user) return json({ error: "create" }, 500);
-      uid = c.user.id;
+    // "this e-mail is taken": the player exists already (a parallel sign-in, or a link row that was lost)
+    const taken = (e: { code?: string } | null) => e?.code === "email_exists";
+    if (caller && !caller.email) {                          // keep this device's nick and results
+      const { error } = await db.auth.admin.updateUserById(caller.id, { email, email_confirm: true });
+      if (!error) uid = caller.id;
+      else if (!taken(error)) return json({ error: "link" }, 500);
     }
-    await db.from("tg_links").insert({ tg_id: tgId, user_id: uid, tg_user: tgUser });
-    linked = true;
+    if (!uid) {
+      const { data: c, error } = await db.auth.admin.createUser({ email, email_confirm: true });
+      uid = c?.user?.id;
+      if (!uid && taken(error)) {
+        const { data: gl } = await db.auth.admin.generateLink({ type: "magiclink", email });
+        uid = gl?.user?.id;
+      }
+      if (!uid) return json({ error: "create" }, 500);
+    }
+    const { error: le } = await db.from("tg_links").upsert({ tg_id: tgId, user_id: uid, tg_user: tgUser }, { onConflict: "tg_id", ignoreDuplicates: true });
+    if (le) return json({ error: "link" }, 500);
+    const { data: won } = await db.from("tg_links").select("user_id").eq("tg_id", tgId).maybeSingle();
+    if (!won) return json({ error: "link" }, 500);
+    uid = won.user_id;                                      // a parallel sign-in may have linked first: use its player
   } else if (tgUser) {
     await db.from("tg_links").update({ tg_user: tgUser }).eq("tg_id", tgId);
   }
@@ -146,7 +165,7 @@ async function loginAs(tgId: number, tgName: string | null, tgUser: string | nul
   }
   const s = v.session;
   return json({
-    status: "ok", linked, tg_id: tgId, name: tgName, username: tgUser, photo,
+    status: "ok", tg_id: tgId, name: tgName, username: tgUser, photo,
     session: { access_token: s.access_token, refresh_token: s.refresh_token, expires_at: s.expires_at, expires_in: s.expires_in },
   });
 }
@@ -157,12 +176,14 @@ async function botCommand(cmd: string, chat: number, lastId: number) {
   } else if (cmd === "help") {
     await tg("sendMessage", { chat_id: chat, text: HELP, reply_markup: MENU, link_preview_options: { is_disabled: true } });
   } else if (cmd === "clear") {
-    // bots may delete messages of the last 48 hours in a private chat; ids there go one after another
-    for (let to = lastId; to > 0 && to > lastId - 1000; to -= 100) {
-      const ids = Array.from({ length: Math.min(100, to) }, (_, i) => to - i);
-      await tg("deleteMessages", { chat_id: chat, message_ids: ids });
-    }
-    await tg("sendMessage", { chat_id: chat, text: "🧹 Чат очищен. Сообщения старше 48 часов Telegram удалить боту не даёт: их можно убрать через «Очистить историю» в меню чата.", reply_markup: MENU });
+    // the reply goes first: its id is the newest in the chat, so everything above it gets deleted
+    // (the button may sit under an old message). Bots may delete messages of the last 48 hours; ids go one after another
+    const sent = await tg("sendMessage", { chat_id: chat, text: "🧹 Чат очищен. Сообщения старше 48 часов Telegram удалить боту не даёт: их можно убрать через «Очистить историю» в меню чата.", reply_markup: MENU });
+    const top = Math.max(lastId, (sent?.result?.message_id ?? 0) - 1);
+    const jobs = [];
+    for (let to = top; to > 0 && to > top - 1000; to -= 100)
+      jobs.push(tg("deleteMessages", { chat_id: chat, message_ids: Array.from({ length: Math.min(100, to) }, (_, i) => to - i) }).catch(() => null));
+    await Promise.all(jobs);
   } else {
     await tg("sendMessage", {
       chat_id: chat,
@@ -195,29 +216,51 @@ Deno.serve(async (req) => {
   }
 
   // Telegram webhook
+  // (always answers 200: an error would make Telegram send the same update again and again)
   if (SECRET && req.headers.get("x-telegram-bot-api-secret-token") === SECRET) {
-    const u = await req.json().catch(() => ({}));
-    const cq = u?.callback_query;
-    if (cq?.message) {                                     // a button under a bot message
-      await tg("answerCallbackQuery", { callback_query_id: cq.id });
-      await botCommand(String(cq.data || ""), cq.message.chat.id, cq.message.message_id);
-      return json({ ok: true });
-    }
-    const m = u?.message;
-    if (!m?.text || !m.from) return json({ ok: true });
-    const start = m.text.match(/^\/start\s+([a-f0-9]{32})\s*$/);
-    if (start) {
-      await db.from("tg_logins").upsert({
-        nonce: start[1], tg_id: m.from.id,
-        tg_name: [m.from.first_name, m.from.last_name].filter(Boolean).join(" ") || null,
-        tg_user: m.from.username ?? null,
-      });
-      await tg("sendMessage", {
-        chat_id: m.chat.id,
-        text: "✅ Готово! Вернитесь в игру «Охота на лис», вход выполнится сам.\n\nНа iPhone: «◀ Safari» в левом верхнем углу.",
-      });
-    } else {
-      await botCommand((m.text.match(/^\/(\w+)/)?.[1] ?? "").toLowerCase(), m.chat.id, m.message_id);
+    try {
+      const u = await req.json().catch(() => ({}));
+      const cq = u?.callback_query;
+      if (cq?.message) {                                   // a button under a bot message
+        const ok = String(cq.data || "").match(/^ok:([a-f0-9]{32}):(\d+)$/);
+        if (ok) {                                          // the player confirmed the sign-in
+          if (cq.message.chat.type !== "private" || cq.from.id !== cq.message.chat.id) {   // only in the player's own chat with the bot
+            await tg("answerCallbackQuery", { callback_query_id: cq.id });
+            return json({ ok: true });
+          }
+          // the 15 minutes count from /start (its time is in the button), so an old prompt can't revive a code
+          const at = new Date(Number(ok[2]) * 1000);
+          if (Date.now() - at.getTime() > 15 * 60e3) {
+            await tg("answerCallbackQuery", { callback_query_id: cq.id, text: "Ссылка устарела — нажмите «Войти через Telegram» в игре ещё раз", show_alert: true });
+            return json({ ok: true });
+          }
+          const saved = await saveLogin(ok[1], cq.from, at);
+          await tg("answerCallbackQuery", { callback_query_id: cq.id, text: saved ? undefined : "Не получилось, попробуйте ещё раз" });
+          if (saved) await tg("editMessageText", {
+            chat_id: cq.message.chat.id, message_id: cq.message.message_id,
+            text: "✅ Готово! Вернитесь в игру «Охота на лис», вход выполнится сам.\n\nНа iPhone: «◀ Safari» в левом верхнем углу.",
+          });
+          return json({ ok: true });
+        }
+        await tg("answerCallbackQuery", { callback_query_id: cq.id });
+        await botCommand(String(cq.data || ""), cq.message.chat.id, cq.message.message_id);
+        return json({ ok: true });
+      }
+      const m = u?.message;
+      if (!m?.text || !m.from) return json({ ok: true });
+      const start = m.chat.type === "private" && m.text.match(/^\/start\s+([a-f0-9]{32})\s*$/);   // m.date: when /start was sent
+      if (start) {
+        // ask first: a link with someone else's code must not sign that person into this Telegram account
+        await tg("sendMessage", {
+          chat_id: m.chat.id,
+          text: "Войти в игру «Охота на лис» с этим Telegram?\n\nПодтверждайте, только если вы сами только что нажали «Войти через Telegram» в игре. Если ссылку прислал кто-то другой — не нажимайте.",
+          reply_markup: { inline_keyboard: [[{ text: "✅ Да, это я — войти", callback_data: `ok:${start[1]}:${m.date}` }]] },
+        });
+      } else {
+        await botCommand((m.text.match(/^\/(\w+)/)?.[1] ?? "").toLowerCase(), m.chat.id, m.message_id);
+      }
+    } catch (e) {
+      console.error("webhook", e);
     }
     return json({ ok: true });
   }
@@ -229,18 +272,17 @@ Deno.serve(async (req) => {
       const chk = await checkInitData(String(body.initData || ""));
       const u = chk.user;
       if (!u?.id) return json({ error: "initdata", why: chk.why ?? "user" }, 401);
-      const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || null;
-      return await loginAs(u.id, name, u.username ?? null, await userOf(req));
+      return await loginAs(u.id, nameOf(u), u.username ?? null, await userOf(req));
     }
     if (body.action === "handoff") {                      // Mini App → browser: a one-time login for the same Telegram account
       const chk = await checkInitData(String(body.initData || ""));
       const u = chk.user;
-      if (!u?.id || !/^[a-f0-9]{32}$/.test(body.nonce ?? "")) return json({ error: "initdata", why: chk.why ?? "nonce" }, 401);
-      await db.from("tg_logins").upsert({
-        nonce: body.nonce, tg_id: u.id,
-        tg_name: [u.first_name, u.last_name].filter(Boolean).join(" ") || null, tg_user: u.username ?? null,
-      });
-      return json({ ok: true });
+      if (!u?.id || !NONCE.test(body.nonce ?? "")) return json({ error: "initdata", why: chk.why ?? "nonce" }, 401);
+      // only a Telegram that already has a player: a handoff link must never attach someone else's Telegram to the opener's nick
+      const { data: has, error: he } = await db.from("tg_links").select("tg_id").eq("tg_id", u.id).maybeSingle();
+      if (he) return json({ error: "save" }, 500);
+      if (!has) return json({ error: "notg" }, 400);
+      return (await saveLogin(body.nonce, u)) ? json({ ok: true }) : json({ error: "save" }, 500);
     }
     if (body.action === "photo") {
       const uid = (await userOf(req))?.id;
@@ -253,13 +295,12 @@ Deno.serve(async (req) => {
       return json({ photo });
     }
     const { nonce } = body;
-    if (!/^[a-f0-9]{32}$/.test(nonce ?? "")) return json({ error: "bad" }, 400);
-    const { data: L } = await db.from("tg_logins").select("*").eq("nonce", nonce).maybeSingle();
+    if (!NONCE.test(nonce ?? "")) return json({ error: "bad" }, 400);
+    const { data: L } = await db.from("tg_logins").delete().eq("nonce", nonce).select().maybeSingle();   // taken and removed at once: one session per nonce
     if (!L) return json({ status: "wait" });
-    await db.from("tg_logins").delete().eq("nonce", nonce);
     if (Date.now() - Date.parse(L.created_at) > 15 * 60e3) return json({ status: "expired" });
 
-    return await loginAs(L.tg_id, L.tg_name, L.tg_user, await userOf(req));
+    return await loginAs(L.tg_id, L.tg_name, L.tg_user, await userOf(req));   // on failure the game says so and offers to try again
   }
 
   return json({ error: "not found" }, 404);

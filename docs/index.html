@@ -1508,7 +1508,12 @@ async function tgTick(){
     else { if (d.photo) store.set('tgPhoto', d.photo); tgNick = tgNickFrom(d.name, d.username); accStep = 'nick'; toast('Telegram подключён. Осталось выбрать ник'); }
     renderAccount(); renderSettings(); if (sheetOpen !== 'sheetAccount') openSheet('sheetAccount');
     netStatsT = 0; store.set('netStats', null);
-  } catch {} finally { tgBusy = false; }
+  } catch (e){
+    if (e.message === 'net') return;                       // no connection: the next tick tries again
+    clearInterval(tgT); store.set('tgNonce', null);        // the server refused: the code is used up, start over
+    if (accStep === 'tgwait'){ accStep = SRV.me()?.nick ? 'manage' : 'nick'; renderAccount(); }
+    toast('Вход не удался, попробуйте ещё раз');
+  } finally { tgBusy = false; }
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && store.get('tgNonce', null)) tgTick(); });
 
@@ -1564,7 +1569,7 @@ function openAccount(){ const me = SRV.me(); accStep = store.get('tgNonce', null
 function renderAccount(){
   const me = SRV.me(), b = $('accBody');
   if (accStep === 'tgwait'){
-    $('accT').textContent = 'Вход через Telegram'; $('accSub').textContent = 'Нажмите «Start» в чате с ботом «Охота на лис» и вернитесь сюда. Вход выполнится сам.';
+    $('accT').textContent = 'Вход через Telegram'; $('accSub').textContent = 'Нажмите «Start» в чате с ботом «Охота на лис», затем «Да, это я — войти» и вернитесь сюда. Вход выполнится сам.';
     b.innerHTML = `<div class="avarow"><span class="ava2 avabig" style="background:none">${TG_ICON}</span><p class="hintline" style="margin:0">Ждём подтверждения в Telegram…</p></div>
       <button class="authbtn" data-a="tgagain"><span class="lg">${TG_ICON}</span>Открыть Telegram ещё раз</button>
       <p class="demo-note">Telegram не открылся? <a href="${tgWebLink()}" target="_blank" rel="noopener">Открыть через сайт Telegram</a></p>
