@@ -1479,25 +1479,33 @@ async function tgTick(){
 document.addEventListener('visibilitychange', () => { if (!document.hidden && store.get('tgNonce', null)) tgTick(); });
 
 // ---------- inside Telegram (Mini App): full screen, no swipe-to-close, automatic sign-in ----------
-let TGW = null;
-const inTG = /tgWebAppData=/.test(location.hash) || (() => { try { return /tgWebAppData=/.test(sessionStorage.getItem('tgHash') || ''); } catch { return false; } })();
-if (inTG){
-  try { if (location.hash) sessionStorage.setItem('tgHash', location.hash); } catch {}
-  document.documentElement.classList.add('in-tg');
-  const sc = document.createElement('script');
-  sc.src = 'https://telegram.org/js/telegram-web-app.js'; sc.onload = tgApp;
-  document.head.appendChild(sc);
+let TGW = null, inTG = false;
+const tgHashData = () => { try { const h = location.hash.slice(1) || sessionStorage.getItem('tgHash') || ''; return new URLSearchParams(h.replace(/^#/, '')).get('tgWebAppData') || ''; } catch { return ''; } };
+{ // Telegram announces itself differently on iPhone / Android / Mac / desktop / web
+  try { if (/tgWebAppData=/.test(location.hash)) sessionStorage.setItem('tgHash', location.hash); } catch {}
+  const hint = tgHashData() || window.TelegramWebviewProxy !== undefined || (window.external && 'notify' in window.external) || window.parent !== window;
+  if (hint){
+    const sc = document.createElement('script');
+    sc.src = 'https://telegram.org/js/telegram-web-app.js';
+    sc.onload = tgApp;
+    sc.onerror = () => { if (tgHashData()) tgApp(); };       // telegram.org didn't load: the sign-in data is in the address anyway
+    document.head.appendChild(sc);
+  }
 }
 function tgApp(){
-  TGW = window.Telegram?.WebApp; if (!TGW?.initData) return;
-  try { TGW.ready(); TGW.expand(); TGW.disableVerticalSwipes?.(); } catch {}
-  tgAppLogin();
+  TGW = window.Telegram?.WebApp || null;
+  const initData = TGW?.initData || tgHashData();
+  if (!initData) return;                                      // an ordinary page in a frame, not a Mini App
+  inTG = true; document.documentElement.classList.add('in-tg'); tgWhere();
+  try { TGW?.ready(); TGW?.expand(); TGW?.disableVerticalSwipes?.(); } catch {}
+  tgAppLogin(initData);
 }
-async function tgAppLogin(){
-  const id = TGW.initDataUnsafe?.user?.id, me = SRV.me();
+async function tgAppLogin(initData){
+  let id = TGW?.initDataUnsafe?.user?.id; try { id = id || JSON.parse(new URLSearchParams(initData).get('user')).id; } catch {}
+  const me = SRV.me();
   if (me?.nick && me.tg && store.get('tgId', null) === id && store.get('sb.session', null)) return;   // already this player
   try {
-    const d = await SRV.tgWebApp(TGW.initData); store.set('tgId', d.tg_id);
+    const d = await SRV.tgWebApp(initData); store.set('tgId', d.tg_id);
     if (!SRV.me()?.nick){                                  // a new player: take the nick from Telegram
       const base = tgNickFrom(d.name, d.username) || 'Охотник';
       for (const n of [base, base.slice(0, 13) + (10 + Math.random() * 89 | 0), 'Охотник' + (100 + Math.random() * 899 | 0)]){
@@ -1507,7 +1515,7 @@ async function tgAppLogin(){
     }
     renderSettings(); netStatsT = 0;
     if (SRV.me()?.nick) toast(`Привет, ${SRV.me().nick}! 🦊`); else openAccount();
-  } catch { toast('Не получилось войти через Telegram'); }
+  } catch (e){ toast(e.message === 'initdata' ? 'Telegram не подтвердил вход. Закройте игру и откройте снова' : e.message === 'net' ? 'Нет связи с сервером' : 'Не получилось войти через Telegram (' + e.message + ')'); }
 }
 
 let accStep = 'nick', accConfirmDel = false, accBusy = false;
@@ -1944,13 +1952,18 @@ function fireworks(area){
   })();
 }
 
+function tgWhere(){
+  $('playTgIc').innerHTML = TG_ICON;
+  $('playTg').hidden = inTG; $('playWeb').hidden = !inTG;
+  if (inTG) $('installGroup').hidden = true;
+}
 // ---------- install as an app ----------
 (() => {
   const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const embedded = window.top !== window.self || inTG;
   let prompt = null;
-  const show = on => { $('installGroup').hidden = !on || standalone || embedded; };
+  const show = on => { $('installGroup').hidden = !on || standalone || embedded || inTG; };
   const SHARE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
   addEventListener('beforeinstallprompt', e => { e.preventDefault(); prompt = e; show(true); });
   addEventListener('appinstalled', () => { prompt = null; show(false); toast('Игра установлена! Ищите лисичку на экране'); });
@@ -1967,9 +1980,7 @@ function fireworks(area){
     openSheet('sheetInstall');
   };
   // where to play: Telegram ↔ browser, one account
-  $('playTgIc').innerHTML = TG_ICON;
-  $('playTg').hidden = inTG;
-  $('playWeb').hidden = !inTG;
+  tgWhere();
   $('playWeb').onclick = () => { try { TGW.openLink('https://fox-hunt.github.io/'); } catch { open('https://fox-hunt.github.io/', '_blank'); } };
 })();
  
