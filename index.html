@@ -1490,26 +1490,27 @@ let tgBusy = false, tgFails = 0;
 async function tgTick(){
   const p = store.get('tgNonce', null);
   if (!p) return tgStop();
-  if (Date.now() - p.at > 15 * 60e3) return tgStop('Время ожидания вышло, попробуйте ещё раз');
+  if (Date.now() - p.at > 15 * 60e3) return tgStop(accStep === 'tgwait' ? 'Время ожидания вышло, попробуйте ещё раз' : '');   // a code left from another day: quietly
   if (document.hidden || tgBusy) return;
   tgBusy = true;
   try {
     const d = await SRV.tgPoll(p.n, p.h);
     tgFails = 0;
-    if (store.get('tgNonce', null)?.n !== p.n){ if (d.status === 'ok') renderSettings(); return; }   // an old code (cancelled or replaced): don't touch the screen
+    if (d.status !== 'ok' && store.get('tgNonce', null)?.n !== p.n) return;   // an answer for an old code: a new attempt is under way
     if (d.status === 'wait') return;
     if (d.status !== 'ok') return tgStop('Вход не удался, попробуйте ещё раз');
     tgEnd();
     const me = SRV.me();
+    netStatsT = 0; store.set('netStats', null);
+    if (d.photo) store.set('tgPhoto', d.photo);
     if (!d.profile){ closeSheets(); renderSettings(); return toast('Вы вошли через Telegram 🦊'); }   // the profile didn't load: it comes with the next refresh
     if (me?.nick){ accStep = 'manage'; toast(`Вы вошли через Telegram: ${me.nick} 🦊`); }
-    else { if (d.photo) store.set('tgPhoto', d.photo); tgNick = tgNickFrom(d.name, d.username); accStep = 'nick'; toast('Telegram подключён. Осталось выбрать ник'); }
+    else { tgNick = tgNickFrom(d.name, d.username); accStep = 'nick'; toast('Telegram подключён. Осталось выбрать ник'); }
     renderAccount(); renderSettings(); if (sheetOpen !== 'sheetAccount') openSheet('sheetAccount');
-    netStatsT = 0; store.set('netStats', null);
   } catch (e){
     if (store.get('tgNonce', null)?.n !== p.n) return;           // an old code: leave the new attempt alone
-    // no connection, or the server stumbled (it keeps the code): try again, but not forever
-    if (e.message === 'net' || ++tgFails < 5) return;
+    // no connection or a gateway hiccup: just try again; the function's own failure (it keeps the code): up to 5 times
+    if (e.message === 'net' || e.message === 'server' || ++tgFails < 5) return;
     tgFails = 0;
     tgStop('Вход не удался, попробуйте ещё раз');
   } finally { tgBusy = false; }
