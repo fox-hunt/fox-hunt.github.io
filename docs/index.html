@@ -479,6 +479,7 @@ html.calm *,html.calm *::before,html.calm *::after{animation:none!important;tran
 .frx{margin-left:auto;width:32px;height:32px;border-radius:50%;color:var(--fg-3);font-size:14px;flex:none}
 .codebox button{height:36px;padding:0 14px;border-radius:999px;background:var(--hair);font-weight:700;font-size:14px}
 .demo-note{font-size:12.5px;line-height:1.45;color:var(--fg-3);text-align:center;margin:0}
+.demo-note a{color:var(--accent);font-weight:600;text-decoration:none}
 .linkbtn{align-self:center;font-weight:700;font-size:14px;color:var(--accent);padding:4px 8px}
 .danger-row b{color:#e5484d}
 #meRow{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--r-md);background:color-mix(in srgb,var(--accent) 12%,var(--tile));box-shadow:0 0 0 2px var(--accent) inset}
@@ -1378,21 +1379,23 @@ const tgNickFrom = (name, user) => {
 function tgStart(){
   const n = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
   store.set('tgNonce', { n, at: Date.now() });
-  window.open(`https://t.me/${TG_BOT}?start=${n}`, '_blank');
-  toast('Нажмите «Start» в Telegram и вернитесь сюда'); tgWatch();
+  tgOpen(); tgWatch(); accStep = 'tgwait'; renderAccount();
 }
+// open the Telegram app itself (no leftover browser tab); a t.me fallback is offered in the sheet
+function tgOpen(){ const p = store.get('tgNonce', null); if (p) location.href = `tg://resolve?domain=${TG_BOT}&start=${p.n}`; }
+const tgWebLink = () => `https://t.me/${TG_BOT}?start=${store.get('tgNonce', null)?.n || ''}`;
 function tgWatch(){ clearInterval(tgT); tgT = setInterval(tgTick, 2500); }
 let tgBusy = false;
 async function tgTick(){
   const p = store.get('tgNonce', null);
-  if (!p || Date.now() - p.at > 15 * 60e3){ clearInterval(tgT); store.set('tgNonce', null); return; }
+  if (!p || Date.now() - p.at > 15 * 60e3){ clearInterval(tgT); store.set('tgNonce', null); if (accStep === 'tgwait'){ accStep = SRV.me()?.nick ? 'manage' : 'nick'; renderAccount(); } return; }
   if (document.hidden || tgBusy) return;
   tgBusy = true;
   try {
     const d = await SRV.tgPoll(p.n);
     if (d.status === 'wait') return;
     clearInterval(tgT); store.set('tgNonce', null);
-    if (d.status !== 'ok') return toast('Вход не удался, попробуйте ещё раз');
+    if (d.status !== 'ok'){ accStep = SRV.me()?.nick ? 'manage' : 'nick'; renderAccount(); return toast('Вход не удался, попробуйте ещё раз'); }
     const me = SRV.me();
     if (me?.nick){ accStep = 'manage'; toast(`Вы вошли через Telegram: ${me.nick} 🦊`); }
     else { if (d.photo) store.set('tgPhoto', d.photo); tgNick = tgNickFrom(d.name, d.username); accStep = 'nick'; toast('Telegram подключён. Осталось выбрать ник'); }
@@ -1406,9 +1409,17 @@ let accStep = 'nick', accConfirmDel = false, accBusy = false;
 const photoBlock = me => `<div class="avarow">${avaHTML(me?.id, me?.ava, me?.nick, 'ava2 avabig')}
   ${me?.nick ? `<div class="btns"><button type="button" data-a="photo">${me.ava ? 'Сменить фото' : 'Загрузить фото'}</button>${me.ava ? '<button type="button" data-a="nophoto">Убрать</button>' : ''}${me.tg ? '<button type="button" data-a="tgphoto">Из Telegram</button>' : ''}</div>
   <input type="file" id="avaFile" accept="image/*" hidden>` : '<p class="hintline" style="margin:0">Фото можно будет загрузить после выбора ника</p>'}</div>`;
-function openAccount(){ const me = SRV.me(); accStep = me?.nick ? 'manage' : 'nick'; accConfirmDel = false; renderAccount(); openSheet('sheetAccount'); SRV.refresh().then(() => { if (accStep === 'manage') renderAccount(); renderSettings(); }); }
+function openAccount(){ const me = SRV.me(); accStep = store.get('tgNonce', null) ? 'tgwait' : me?.nick ? 'manage' : 'nick'; accConfirmDel = false; renderAccount(); openSheet('sheetAccount'); SRV.refresh().then(() => { if (accStep === 'manage') renderAccount(); renderSettings(); }); }
 function renderAccount(){
   const me = SRV.me(), b = $('accBody');
+  if (accStep === 'tgwait'){
+    $('accT').textContent = 'Вход через Telegram'; $('accSub').textContent = 'Нажмите «Start» в чате с ботом «Охота на лис» и вернитесь сюда. Вход выполнится сам.';
+    b.innerHTML = `<div class="avarow"><span class="ava2 avabig" style="background:none">${TG_ICON}</span><p class="hintline" style="margin:0">Ждём подтверждения в Telegram…</p></div>
+      <button class="authbtn" data-a="tgagain"><span class="lg">${TG_ICON}</span>Открыть Telegram ещё раз</button>
+      <p class="demo-note">Telegram не открылся? <a href="${tgWebLink()}" target="_blank" rel="noopener">Открыть через сайт Telegram</a></p>
+      <button class="linkbtn" data-a="tgcancel" style="align-self:center">Отмена</button>`;
+    return;
+  }
   if (accStep === 'nick' || !me?.nick){
     const sug = suggestNicks();
     $('accT').textContent = me?.nick ? 'Ваш ник' : 'Общая таблица';
@@ -1446,6 +1457,8 @@ $('accBody').addEventListener('click', async e => {
   if (a === 'copy'){ try { await navigator.clipboard.writeText(me.code); toast('Код скопирован'); } catch { toast('Код: ' + me.code); } }
   if (a === 'photo'){ $('avaFile').click(); return; }
   if (a === 'tg'){ tgStart(); return; }
+  if (a === 'tgagain'){ tgOpen(); return; }
+  if (a === 'tgcancel'){ clearInterval(tgT); store.set('tgNonce', null); accStep = me?.nick ? 'manage' : 'nick'; renderAccount(); return; }
   if (a === 'out'){ SRV.signOut(); tgNick = ''; closeSheets(); renderSettings(); toast('Вы вышли. Войти снова: ⚙️ → Общая таблица → Telegram'); return; }
   if (a === 'del'){ accConfirmDel = true; renderAccount(); }
   if (a === 'nodel'){ accConfirmDel = false; renderAccount(); }
