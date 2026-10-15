@@ -1483,8 +1483,10 @@ const tgNickFrom = (name, user) => {
   if (n.length < 3) n = (user || '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 16);
   return n.length >= 3 ? n : '';
 };
+// a one-time sign-in code: 32 hex characters, as the server expects
+const tgNewNonce = () => [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
 function tgStart(){
-  const n = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
+  const n = tgNewNonce();
   store.set('tgNonce', { n, at: Date.now() });
   tgOpen(); tgWatch(); accStep = 'tgwait'; renderAccount();
 }
@@ -1493,22 +1495,25 @@ function tgOpen(){ const p = store.get('tgNonce', null); if (p) location.href = 
 const tgWebLink = () => `https://t.me/${TG_BOT}?start=${store.get('tgNonce', null)?.n || ''}`;
 function tgWatch(){ clearInterval(tgT); tgT = setInterval(tgTick, 2500); }
 // stop waiting for the bot and leave the "waiting" screen
+const tgEnd = () => { clearInterval(tgT); store.set('tgNonce', null); };
 function tgStop(msg){
-  clearInterval(tgT); store.set('tgNonce', null);
+  tgEnd();
   if (accStep === 'tgwait'){ accStep = SRV.me()?.nick ? 'manage' : 'nick'; renderAccount(); }
   if (msg) toast(msg);
 }
 let tgBusy = false;
 async function tgTick(){
   const p = store.get('tgNonce', null);
-  if (!p || Date.now() - p.at > 15 * 60e3) return tgStop();
+  if (!p) return tgStop();
+  if (Date.now() - p.at > 15 * 60e3) return tgStop('Время ожидания вышло, попробуйте ещё раз');
   if (document.hidden || tgBusy) return;
   tgBusy = true;
   try {
     const d = await SRV.tgPoll(p.n, p.h);
+    if (d.status !== 'ok' && store.get('tgNonce', null)?.n !== p.n) return;   // an answer for an old code: a new attempt is under way
     if (d.status === 'wait') return;
     if (d.status !== 'ok') return tgStop('Вход не удался, попробуйте ещё раз');
-    clearInterval(tgT); store.set('tgNonce', null);
+    tgEnd();
     const me = SRV.me();
     if (me?.nick){ accStep = 'manage'; toast(`Вы вошли через Telegram: ${me.nick} 🦊`); }
     else { if (d.photo) store.set('tgPhoto', d.photo); tgNick = tgNickFrom(d.name, d.username); accStep = 'nick'; toast('Telegram подключён. Осталось выбрать ник'); }
@@ -1516,6 +1521,7 @@ async function tgTick(){
     netStatsT = 0; store.set('netStats', null);
   } catch (e){
     if (e.message === 'net' || e.message === 'server') return;   // no connection or a passing server hiccup: the next tick tries again
+    if (store.get('tgNonce', null)?.n !== p.n) return;           // an old code: leave the new attempt alone
     tgStop('Вход не удался, попробуйте ещё раз');                // the sign-in itself was refused: the code is used up
   } finally { tgBusy = false; }
 }
@@ -2037,7 +2043,7 @@ function tgWhere(){
   $('playWeb').onclick = async () => {
     let url = 'https://fox-hunt.github.io/';
     try {
-      const n = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
+      const n = tgNewNonce();
       if (await SRV.tgHandoff(TGW?.initData || tgHashData(), n)) url += '#login=' + n;
     } catch {}
     try { TGW.openLink(url); } catch { open(url, '_blank'); }

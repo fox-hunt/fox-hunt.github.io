@@ -55,6 +55,8 @@ const HELP = "🦊 «Охота на лис» — логическая игра 
 
 const NONCE_RE = "[a-f0-9]{32}";
 const NONCE = new RegExp(`^${NONCE_RE}$`);
+const OK_CB = new RegExp(`^ok:(${NONCE_RE}):(\\d+)$`);       // the confirm button: code and the time of /start
+const START = new RegExp(`^/start\\s+(${NONCE_RE})\\s*$`);
 const nameOf = (u: { first_name?: string; last_name?: string }) => [u.first_name, u.last_name].filter(Boolean).join(" ") || null;
 // a confirmed sign-in code: the poll from the game turns it into a session (old ones are cleared on the way)
 // (Mini App → browser codes are kept as "h:<nonce>": a link can only ever sign in as that Telegram's own player)
@@ -146,11 +148,13 @@ async function loginAs(tgId: number, tgName: string | null, tgUser: string | nul
       }
       if (!uid) return json({ error: "create" }, 500);
     }
-    const { error: le } = await db.from("tg_links").upsert({ tg_id: tgId, user_id: uid, tg_user: tgUser }, { onConflict: "tg_id", ignoreDuplicates: true });
+    const { data: ins, error: le } = await db.from("tg_links").upsert({ tg_id: tgId, user_id: uid, tg_user: tgUser }, { onConflict: "tg_id", ignoreDuplicates: true }).select("user_id");
     if (le) return json({ error: "link" }, 500);
-    const { data: won } = await db.from("tg_links").select("user_id").eq("tg_id", tgId).maybeSingle();
-    if (!won) return json({ error: "link" }, 500);
-    uid = won.user_id;                                      // a parallel sign-in may have linked first: use its player
+    if (!ins?.length) {                                     // a parallel sign-in linked first: use its player
+      const { data: won } = await db.from("tg_links").select("user_id").eq("tg_id", tgId).maybeSingle();
+      if (!won) return json({ error: "link" }, 500);
+      uid = won.user_id;
+    }
   } else if (tgUser) {
     await db.from("tg_links").update({ tg_user: tgUser }).eq("tg_id", tgId);
   }
@@ -185,10 +189,8 @@ async function botCommand(cmd: string, chat: number, lastId: number) {
     // (the button may sit under an old message). Bots may delete messages of the last 48 hours; ids go one after another
     const sent = await tg("sendMessage", { chat_id: chat, text: "🧹 Чат очищен. Сообщения старше 48 часов Telegram удалить боту не даёт: их можно убрать через «Очистить историю» в меню чата.", reply_markup: MENU });
     const top = Math.max(lastId, (sent?.result?.message_id ?? 0) - 1);
-    const jobs = [];
-    for (let to = top; to > 0 && to > top - 1000; to -= 100)
-      jobs.push(tg("deleteMessages", { chat_id: chat, message_ids: Array.from({ length: Math.min(100, to) }, (_, i) => to - i) }).catch(() => null));
-    await Promise.all(jobs);
+    for (let to = top; to > 0 && to > top - 1000; to -= 100)      // one batch at a time: parallel ones get throttled by Telegram
+      await tg("deleteMessages", { chat_id: chat, message_ids: Array.from({ length: Math.min(100, to) }, (_, i) => to - i) }).catch(() => null);
   } else {
     await tg("sendMessage", {
       chat_id: chat,
@@ -227,7 +229,7 @@ Deno.serve(async (req) => {
       const u = await req.json().catch(() => ({}));
       const cq = u?.callback_query;
       if (cq?.message) {                                   // a button under a bot message
-        const ok = String(cq.data || "").match(new RegExp(`^ok:(${NONCE_RE}):(\\d+)$`));
+        const ok = String(cq.data || "").match(OK_CB);
         if (ok) {                                          // the player confirmed the sign-in
           if (cq.message.chat.type !== "private" || cq.from.id !== cq.message.chat.id) {   // only in the player's own chat with the bot
             await tg("answerCallbackQuery", { callback_query_id: cq.id });
@@ -254,7 +256,7 @@ Deno.serve(async (req) => {
       }
       const m = u?.message;
       if (!m?.text || !m.from) return json({ ok: true });
-      const start = m.chat.type === "private" && m.text.match(new RegExp(`^/start\\s+(${NONCE_RE})\\s*$`));   // m.date: when /start was sent
+      const start = m.chat.type === "private" && m.text.match(START);   // m.date: when /start was sent
       if (start) {
         // ask first: a link with someone else's code must not sign that person into this Telegram account
         await tg("sendMessage", {
@@ -307,7 +309,12 @@ Deno.serve(async (req) => {
     if (Date.now() - Date.parse(L.created_at) > 15 * 60e3) return json({ status: "expired" });
 
     // a handoff code never attaches the opener's account: it only signs in as the Telegram's own player
-    return await loginAs(L.tg_id, L.tg_name, L.tg_user, handoff ? null : await userOf(req));   // on failure the game says so and offers to try again
+    try {
+      return await loginAs(L.tg_id, L.tg_name, L.tg_user, handoff ? null : await userOf(req));   // a refusal: the game says so
+    } catch (e) {
+      await db.from("tg_logins").upsert(L);                // crashed half-way: keep the code, the game's next poll tries again
+      throw e;
+    }
   }
 
   return json({ error: "not found" }, 404);
