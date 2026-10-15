@@ -131,6 +131,7 @@ async function loginAs(tgId: number, tgName: string | null, tgUser: string | nul
   const { data: link } = await db.from("tg_links").select("user_id").eq("tg_id", tgId).maybeSingle();
   let uid: string | undefined = link?.user_id;
   let made: { user?: { id: string }; properties?: { hashed_token?: string } } | null = null;   // a sign-in link made on the way
+  const fresh = !uid;                                       // linked just now
   if (!uid) {
     // "this e-mail is taken": the player exists already (a parallel sign-in, or a link row that was lost)
     const taken = (e: { code?: string } | null) => e?.code === "email_exists";
@@ -166,9 +167,10 @@ async function loginAs(tgId: number, tgName: string | null, tgUser: string | nul
   if (ve || !v?.session) return json({ error: "session" }, 500);
 
   // Telegram photo as the avatar, unless the player already has one
+  // (a player without a nick has no profile yet: the photo is copied once, when Telegram gets linked)
   const { data: prof } = await db.from("profiles").select("avatar_v").eq("id", uid).maybeSingle();
   let photo: number | null = null;
-  if (!prof?.avatar_v) {
+  if (prof ? !prof.avatar_v : fresh) {
     photo = await copyPhoto(tgId, uid!);
     if (photo && prof) await db.from("profiles").update({ avatar_v: photo }).eq("id", uid);
   }
