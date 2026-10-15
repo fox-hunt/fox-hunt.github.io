@@ -187,7 +187,8 @@ Deno.serve(async (req) => {
     await tg("setMyDescription", { description: "🦊 Логическая игра «Охота на лис»: найдите лис в лесу по пеленгу.\n\nИгра дня — одна расстановка для всех, общая таблица, серии и значки. Нажмите «Играть»!" });
     await tg("setMyShortDescription", { short_description: "Логическая игра «Охота на лис» 🦊 Игра дня, общая таблица и значки" });
     const me = await tg("getMe", {});
-    return json({ webhook: hook, menu, commands: cmds, bot: me?.result?.username });
+    const info = await tg("getWebhookInfo", {});
+    return json({ webhook: hook, menu, commands: cmds, bot: me?.result?.username, updates: info?.result?.allowed_updates, pending: info?.result?.pending_update_count, last_error: info?.result?.last_error_message ?? null });
   }
 
   // Telegram webhook
