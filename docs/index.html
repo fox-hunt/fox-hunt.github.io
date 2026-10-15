@@ -461,6 +461,7 @@ html.calm *,html.calm *::before,html.calm *::after{animation:none!important;tran
 .chips button{height:34px;padding:0 12px;border-radius:999px;background:var(--tile);box-shadow:inset 0 0 0 1px var(--hair);font-size:14px;font-weight:600}
 .codebox{display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:var(--r-md);background:var(--tile)}
 .codebox b{flex:1;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:22px;letter-spacing:.08em}
+.frx{margin-left:auto;width:32px;height:32px;border-radius:50%;color:var(--fg-3);font-size:14px;flex:none}
 .codebox button{height:36px;padding:0 14px;border-radius:999px;background:var(--hair);font-weight:700;font-size:14px}
 .demo-note{font-size:12.5px;line-height:1.45;color:var(--fg-3);text-align:center;margin:0}
 .linkbtn{align-self:center;font-weight:700;font-size:14px;color:var(--accent);padding:4px 8px}
@@ -647,8 +648,8 @@ html.calm *,html.calm *::before,html.calm *::after{animation:none!important;tran
     <div class="seg tabs" id="tabSeg" style="--k:2"><i class="pill"></i><button data-v="rec">Рекорды</button><button data-v="stats">Статистика</button></div>
     <div class="seg" id="lvlSeg" style="--k:3"><i class="pill"></i><button data-v="kid">Лисёнок</button><button data-v="classic">Классика</button><button data-v="pro">Профи</button></div>
     <div class="pane" id="paneRec">
-      <div class="seg" id="seg" style="--k:4"><i class="pill"></i><button data-v="mine">Мои</button><button data-v="friends">Друзья</button><button data-v="all">Все</button><button data-v="daily">Игра дня</button></div>
-      <div class="seg mini" id="perSegR" style="--k:2" hidden><i class="pill"></i><button data-v="week">Неделя</button><button data-v="all">Всё время</button></div>
+      <div class="seg" id="seg" style="--k:3"><i class="pill"></i><button data-v="mine">Мои</button><button data-v="daily">Игра дня</button><button data-v="friends">Друзья</button></div>
+      <div class="seg mini" id="perSegR" style="--k:2" hidden><i class="pill"></i><button data-v="0">Сегодня</button><button data-v="1">Вчера</button></div>
       <div class="board-list" id="recList"></div>
       <div class="dots" id="recDots"></div>
       <div id="meRow" hidden></div>
@@ -751,7 +752,8 @@ function newState(){
   while (foxes.length < lv.foxes){ const i = rnd() * lv.n * lv.n | 0; if (!foxes.includes(i)) foxes.push(i); }
   const poses = foxes.map((_, k) => k === 0 ? POSES[1 + (rnd() * (POSES.length - 1) | 0)] : POSES[rnd() * POSES.length | 0]);
   const hints = S ? S.hints : store.get('hints', true);
-  return { v: 3, level, daily, foxes, poses, opened: [], marks: {}, hints, hintsEver: hints, start: 0, end: 0, pausedMs: 0, pauseAt: 0, saved: false };
+  const replay = !!(daily && store.get('dailyDone', {})[daily + '|' + level]);   // only the first attempt of the day goes to the shared table
+  return { v: 3, level, daily, replay, foxes, poses, opened: [], marks: {}, hints, hintsEver: hints, start: 0, end: 0, pausedMs: 0, pauseAt: 0, saved: false };
 }
 const isFox = i => S.foxes.includes(i);
 const count = i => S.foxes.filter(f => onLine(i, f)).length;       // like 'Прятки'!M2:V11
@@ -1206,8 +1208,10 @@ function win(){
   $('pname').value = store.get('name', '');
   const acc = SRV.me(), signed = !!(acc && acc.nick);
   $('winForm').hidden = S.saved || signed; $('savedMsg').hidden = !S.saved && !signed;
-  $('winSignIn').hidden = signed;
-  if (signed && !S.saved){ $('savedMsg').textContent = 'Отправляем результат…'; saveResult(acc.nick); }
+  $('winSignIn').hidden = signed || !S.daily || S.replay;
+  $('winSignIn').textContent = 'Попасть в общую таблицу игры дня →';
+  if (signed && !S.saved) saveResult(acc.nick);
+  else if (signed && S.daily) sendDaily();
   $('sheetWin').querySelector('.trophy').innerHTML = foxSVG(SET.poses ? pick(POSES) : 'base');
   openSheet('sheetWin'); sfx('win'); confetti(ti <= 1 ? 320 : ti <= 2 ? 200 : 140);
   if (S.awarded) return;
@@ -1230,124 +1234,114 @@ $('btnAgain').onclick = () => newGame();
 // The game talks to the server only through SRV. Today SRV is a demo server kept in this browser
 // (with made-up rivals); a real backend (Supabase) will implement the same methods.
 const SRV = (() => {
-  const KEY = 'demo.srv', wait = v => new Promise(r => setTimeout(() => r(v), 120));
-  const ADJ = ['Рыжий', 'Хитрый', 'Быстрый', 'Лесной', 'Ночной', 'Тихий', 'Меткий', 'Зоркий', 'Смелый', 'Весёлый', 'Ловкий', 'Северный'];
-  const NOUN = ['Лис', 'Следопыт', 'Охотник', 'Ёж', 'Барсук', 'Филин', 'Енот', 'Бобр', 'Волк', 'Пеленгатор', 'Лесник', 'Заяц'];
-  const MEAN = { kid: [12, 3.5, 4], classic: [19, 4.5, 6], pro: [31, 7, 9] };
-  const code = () => 'LIS-' + Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.random() * 32 | 0]).join('');
-  const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 1.6;
-  let db = store.get(KEY, null);
-  if (!db){
-    db = { users: {}, results: [] };
-    const now = Date.now(), today = todayKey();
-    for (let k = 0; k < 240; k++){
-      const uid = 'bot' + k, nick = `${ADJ[k % ADJ.length]}${NOUN[(k * 7) % NOUN.length]}${k > 140 ? '_' + (k % 97) : ''}`;
-      db.users[uid] = { nick, public: true, code: code(), friends: [], bot: true };
-      for (const lv of ['kid', 'classic', 'pro']){
-        const [m, sd, min] = MEAN[lv], skill = gauss() * .6;
-        for (let g = 0, n = 1 + (Math.random() * 6 | 0); g < n; g++){
-          const moves = Math.max(min, Math.round(m + (gauss() + skill) * sd)), at = now - Math.random() * 60 * 864e5;
-          db.results.push({ uid, level: lv, moves, ms: moves * (3500 + Math.random() * 3500) | 0, at, daily: '' });
-        }
-        if (Math.random() < .35){ const moves = Math.max(min, Math.round(m + (gauss() + skill) * sd)); db.results.push({ uid, level: lv, moves, ms: moves * 4500 | 0, at: now - Math.random() * 6 * 36e5, daily: today }); }
-      }
-    }
-    store.set(KEY, db);
+  const URL = 'https://ctzapxazhaaddgghztqw.supabase.co', KEY = 'sb_publishable_sSBwofwoUVYgoqhHx1GVUA_9Dts6BHr';
+  try { localStorage.removeItem('foxhunt.demo.srv'); localStorage.removeItem('foxhunt.acc.uid'); } catch {}
+  const hdr = t => ({ apikey: KEY, 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bearer ' + t } : {}) });
+  const keep = s => store.set('sb.session', { access_token: s.access_token, refresh_token: s.refresh_token, expires_at: s.expires_at || (Date.now() / 1000 + (s.expires_in || 3600)) });
+  const drop = () => { store.set('sb.session', null); store.set('acc.profile', null); };
+  const go = (u, o) => fetch(u, o).catch(() => { throw new Error('net'); });
+  let refreshing = null;
+  async function token(){
+    const s = store.get('sb.session', null); if (!s) return null;
+    if (s.expires_at * 1000 > Date.now() + 60000) return s.access_token;
+    refreshing = refreshing || (async () => {
+      const r = await go(URL + '/auth/v1/token?grant_type=refresh_token', { method: 'POST', headers: hdr(), body: JSON.stringify({ refresh_token: s.refresh_token }) });
+      if (r.ok){ keep(await r.json()); return store.get('sb.session').access_token; }
+      if (r.status >= 400 && r.status < 500) drop();         // the account is gone or the session was revoked
+      return null;
+    })().finally(() => { refreshing = null; });
+    return refreshing;
   }
-  const save = () => store.set(KEY, db);
-  const meId = () => store.get('acc.uid', null);
+  async function rpc(fn, body = {}){
+    const t = await token();
+    const r = await go(URL + '/rest/v1/rpc/' + fn, { method: 'POST', headers: hdr(t), body: JSON.stringify(body) });
+    const txt = await r.text(), data = txt ? JSON.parse(txt) : null;
+    if (!r.ok) throw new Error(data?.message || 'server');
+    return data;
+  }
+  async function ensure(){
+    if (await token()) return;
+    const r = await go(URL + '/auth/v1/signup', { method: 'POST', headers: hdr(), body: '{}' });   // anonymous account
+    if (!r.ok) throw new Error('signup');
+    keep(await r.json());
+  }
+  const setMe = p => { store.set('acc.profile', p || null); return p; };
   return {
-    demo: true,
-    me(){ const id = meId(); return id && db.users[id] ? { id, ...db.users[id] } : null; },
-    async signIn(provider, email){
-      const key = provider === 'email' ? 'email:' + email.toLowerCase() : provider + ':demo';
-      let id = Object.keys(db.users).find(u => db.users[u].key === key);
-      if (!id){ id = 'u' + Date.now().toString(36); db.users[id] = { key, provider, email: email || '', nick: null, public: true, code: code(), friends: [] }; save(); }
-      store.set('acc.uid', id); return wait(this.me());
+    me: () => store.get('acc.profile', null),
+    async refresh(){ if (!store.get('sb.session', null)) return null; try { return setMe(await rpc('my_profile')); } catch { return this.me(); } },
+    nickFree: n => rpc('nick_free', { p_nick: n }),
+    async setNick(n){
+      await ensure();
+      try { return setMe(await rpc('set_nick', { p_nick: n })); }
+      catch (e){ throw new Error(e.message === 'nick_taken' ? 'taken' : e.message); }
     },
-    async signOut(){ store.set('acc.uid', null); return wait(true); },
-    async deleteAccount(){ const id = meId(); if (!id) return; delete db.users[id]; db.results = db.results.filter(r => r.uid !== id); save(); store.set('acc.uid', null); return wait(true); },
-    async nickFree(nick){ const n = nick.toLowerCase(), id = meId(); return wait(!Object.entries(db.users).some(([u, v]) => u !== id && (v.nick || '').toLowerCase() === n)); },
-    async setNick(nick){ const id = meId(); if (!(await this.nickFree(nick))) throw new Error('taken'); db.users[id].nick = nick; save(); return wait(true); },
-    async setPublic(on){ db.users[meId()].public = !!on; save(); return wait(true); },
+    async setPublic(on){ await rpc('set_public', { p_on: !!on }); return setMe({ ...this.me(), public: !!on }); },
     async addFriend(c){
-      const id = meId(), f = Object.keys(db.users).find(u => db.users[u].code === c.trim().toUpperCase());
-      if (!f) throw new Error('notfound'); if (f === id) throw new Error('self');
-      const me = db.users[id]; if (!me.friends.includes(f)) me.friends.push(f); save(); return wait(db.users[f].nick);
+      try { const nick = await rpc('add_friend', { p_code: c }); await this.refresh(); return nick; }
+      catch (e){ throw new Error(e.message === 'friend_self' ? 'self' : e.message === 'net' ? 'net' : 'notfound'); }
     },
-    async removeFriend(f){ const me = db.users[meId()]; me.friends = me.friends.filter(x => x !== f); save(); return wait(true); },
-    sampleCode(){ return db.users.bot3.code; },
-    async submit(r){ const id = meId(); if (!id) return; db.results.push({ uid: id, ...r }); save(); return wait(true); },
-    // best result per player, ranked: fewer moves first, then faster
-    async board({ level, scope, period }){
-      const id = meId(), me = id && db.users[id], now = Date.now(), today = todayKey();
-      const allow = scope === 'friends' ? new Set([...(me?.friends || []), id]) : null;
-      const best = new Map();
-      for (const r of db.results){
-        if (r.level !== level) continue;
-        if (scope === 'daily' ? r.daily !== today : period === 'week' && r.at < now - 7 * 864e5) continue;
-        const u = db.users[r.uid]; if (!u || !u.nick || (!u.public && r.uid !== id) || (allow && !allow.has(r.uid))) continue;
-        const b = best.get(r.uid); if (!b || r.moves < b.moves || (r.moves === b.moves && r.ms < b.ms)) best.set(r.uid, r);
-      }
-      const rows = [...best.values()].sort((a, b) => a.moves - b.moves || a.ms - b.ms || a.at - b.at)
-        .map((r, k) => ({ rank: k + 1, uid: r.uid, nick: db.users[r.uid].nick, moves: r.moves, ms: r.ms, at: r.at, me: r.uid === id }));
-      return wait({ total: rows.length, rows: rows.slice(0, 50), mine: rows.find(r => r.me) || null });
-    },
+    async removeFriend(id){ await rpc('remove_friend', { p_id: id }); return this.refresh(); },
+    async deleteAccount(){ await rpc('delete_account'); drop(); },
+    submitDaily: ({ level, day, ms, hints, opened }) => rpc('submit_daily', { p_level: level, p_day: day, p_time_ms: Math.round(ms), p_hints: !!hints, p_opened: opened }),
+    board: ({ level, day, scope }) => rpc('day_board', { p_level: level, p_day: day, p_scope: scope }),
   };
 })();
+// "you did better than N% of players" from the moves distribution of the day
+const beatPct = b => { if (!b?.mine || b.total < 2) return null; const worse = b.dist.filter(d => d.m > b.mine.moves).reduce((s, d) => s + d.n, 0); return Math.round(100 * worse / (b.total - 1)); };
+const dayKey = back => { const d = new Date(Date.now() - back * 864e5); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const netErr = () => toast('Нет связи с сервером. Попробуйте ещё раз');
 
 const NICK_RE = /^[A-Za-zА-Яа-яЁё0-9_\-]{3,16}$/, BAD = ['хуй', 'пизд', 'еба', 'бля', 'fuck', 'shit'];
 const nickProblem = n => !NICK_RE.test(n) ? 'От 3 до 16 символов: буквы, цифры, «_» и «-»' : BAD.some(b => n.toLowerCase().includes(b)) ? 'Такой ник нельзя, выберите другой' : '';
 const suggestNicks = () => { const a = ['Рыжий', 'Хитрый', 'Зоркий', 'Лесной', 'Меткий'], b = ['Лис', 'Следопыт', 'Охотник', 'Филин', 'Ёж']; return [0, 1, 2].map(() => pick(a) + pick(b) + (10 + Math.random() * 89 | 0)); };
 
-let accStep = 'start', accEmail = '', accConfirmDel = false;
-function openAccount(){ const me = SRV.me(); accStep = !me ? 'start' : !me.nick ? 'nick' : 'manage'; accConfirmDel = false; renderAccount(); openSheet('sheetAccount'); }
+let accStep = 'nick', accConfirmDel = false, accBusy = false;
+function openAccount(){ const me = SRV.me(); accStep = me?.nick ? 'manage' : 'nick'; accConfirmDel = false; renderAccount(); openSheet('sheetAccount'); SRV.refresh().then(() => { if (accStep === 'manage') renderAccount(); renderSettings(); }); }
 function renderAccount(){
-  const me = SRV.me(), b = $('accBody'), demo = SRV.demo ? '<p class="demo-note">Демо-режим: вход без письма и пароля, соперники в таблицах ненастоящие. Всё хранится только в этом браузере.</p>' : '';
-  if (accStep === 'start'){
-    $('accT').textContent = 'Вход'; $('accSub').textContent = 'Ваши рекорды попадут в общую таблицу. Другие игроки увидят только ваш ник, почту не увидит никто.';
-    b.innerHTML = `<button class="authbtn" data-p="google"><span class="lg" style="background:#4285f4">G</span>Войти через Google</button>
-      <button class="authbtn" data-p="yandex"><span class="lg" style="background:#fc3f1d">Я</span>Войти через Яндекс ID</button>
-      <div class="or">или по почте</div>
-      <form class="body" id="emailForm" style="margin:0;gap:8px"><div class="field"><input id="accEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" required></div>
-      <button class="primary wide" type="submit">Получить ссылку для входа</button></form>${demo}`;
-  } else if (accStep === 'nick'){
+  const me = SRV.me(), b = $('accBody');
+  if (accStep === 'nick' || !me?.nick){
     const sug = suggestNicks();
-    $('accT').textContent = 'Ваш ник'; $('accSub').textContent = 'Так вас увидят в таблицах рекордов. Его можно поменять потом.';
+    $('accT').textContent = me?.nick ? 'Ваш ник' : 'Общая таблица';
+    $('accSub').textContent = me?.nick ? 'Так вас видят в таблицах рекордов.' : 'Придумайте ник, и ваши игры дня попадут в общую таблицу. Почту и пароль не спрашиваем.';
     b.innerHTML = `<form class="body" id="nickForm" style="margin:0;gap:10px"><div class="field"><input id="accNick" maxlength="16" autocomplete="nickname" placeholder="Например, ${sug[0]}" value="${esc(me?.nick || '')}" required></div>
       <p class="hintline" id="nickHint">От 3 до 16 символов: буквы, цифры, «_» и «-»</p>
       <div class="chips">${sug.map(n => `<button type="button" data-n="${n}">${n}</button>`).join('')}</div>
-      <button class="primary wide" type="submit" id="nickSave">Готово</button></form>`;
+      <button class="primary wide" type="submit" id="nickSave">${me?.nick ? 'Сохранить' : 'Играть в общей таблице'}</button></form>
+      ${me?.nick ? '' : '<p class="demo-note">Аккаунт хранится в этом браузере. Другие игроки видят только ваш ник.</p>'}`;
     setTimeout(() => $('accNick')?.focus(), 350);
   } else {
-    $('accT').textContent = 'Аккаунт'; $('accSub').textContent = me.email ? 'Вход по почте ' + me.email.replace(/^(.).*(@.*)$/, '$1•••$2') : 'Вход через ' + (me.provider === 'google' ? 'Google' : 'Яндекс ID');
+    $('accT').textContent = 'Аккаунт'; $('accSub').textContent = 'Аккаунт хранится в этом браузере. Если очистить данные сайта, он потеряется.';
+    const fr = me.friends || [];
     b.innerHTML = `<div class="group">
         <button class="row" data-a="nick"><span class="ava2">${esc(me.nick[0].toUpperCase())}</span><span class="rt"><b>${esc(me.nick)}</b><span>Изменить ник</span></span><span class="chev">›</span></button>
-        <button class="row" role="switch" data-a="public" aria-checked="${me.public}"><span class="ri">🏆</span><span class="rt"><b>Показывать мои рекорды другим</b><span>${me.public ? 'Вы есть в общих таблицах' : 'Вас видите только вы'}</span></span><i class="switch"></i></button>
+        <button class="row" role="switch" data-a="public" aria-checked="${me.public}"><span class="ri">🏆</span><span class="rt"><b>Показывать мои рекорды всем</b><span>${me.public ? 'Вы есть в общей таблице' : 'Вас видят только друзья'}</span></span><i class="switch"></i></button>
       </div>
       <div class="sect">Код для друзей</div>
-      <div class="codebox"><b>${me.code}</b><button data-a="copy">Скопировать</button></div>
+      <div class="codebox"><b>${esc(me.code)}</b><button data-a="copy">Скопировать</button></div>
       <p class="hintline">Друг вводит этот код во вкладке «🏆 → Друзья», и вы видите результаты друг друга.</p>
+      ${fr.length ? `<div class="sect">Друзья · ${fr.length}</div><div class="group">${fr.map(f => `<div class="row"><span class="ava2">${esc(f.nick[0].toUpperCase())}</span><span class="rt"><b>${esc(f.nick)}</b></span><button class="frx" data-a="unfriend" data-id="${f.id}" aria-label="Удалить из друзей">✕</button></div>`).join('')}</div>` : ''}
       <div class="group">
-        <button class="row" data-a="out"><span class="ri">↩︎</span><span class="rt"><b>Выйти</b></span></button>
-        ${accConfirmDel ? `<div class="row danger-row" style="flex-wrap:wrap"><span class="rt"><b>Удалить аккаунт?</b><span>Ник и результаты в общих таблицах исчезнут. Рекорды на этом устройстве останутся.</span></span>
+        ${accConfirmDel ? `<div class="row danger-row" style="flex-wrap:wrap"><span class="rt"><b>Удалить аккаунт?</b><span>Ник и результаты в общей таблице исчезнут навсегда. Рекорды на этом устройстве останутся.</span></span>
           <div class="clear" style="width:100%"><button class="danger" data-a="del2">Удалить</button><button data-a="nodel">Отмена</button></div></div>`
         : '<button class="row danger-row" data-a="del"><span class="ri">🗑</span><span class="rt"><b>Удалить аккаунт</b></span></button>'}
-      </div>${demo}`;
+      </div>`;
   }
 }
 $('accBody').addEventListener('click', async e => {
-  const t = e.target.closest('button'); if (!t) return;
-  if (t.dataset.p){ await SRV.signIn(t.dataset.p); accStep = SRV.me().nick ? 'manage' : 'nick'; renderAccount(); renderSettings(); return; }
-  if (t.dataset.n){ $('accNick').value = t.dataset.n; $('accNick').dispatchEvent(new Event('input')); return; }
+  const t = e.target.closest('button'); if (!t || accBusy) return;
+  if (t.dataset.n){ $('accNick').value = t.dataset.n; $('accNick').dispatchEvent(new Event('input', { bubbles: true })); return; }
   const a = t.dataset.a, me = SRV.me();
   if (a === 'nick'){ accStep = 'nick'; renderAccount(); }
-  if (a === 'public'){ await SRV.setPublic(!me.public); renderAccount(); renderSettings(); toast(!me.public ? 'Ваши рекорды видны всем' : 'Ваши рекорды скрыты'); }
   if (a === 'copy'){ try { await navigator.clipboard.writeText(me.code); toast('Код скопирован'); } catch { toast('Код: ' + me.code); } }
-  if (a === 'out'){ await SRV.signOut(); closeSheets(); renderSettings(); toast('Вы вышли из аккаунта'); }
   if (a === 'del'){ accConfirmDel = true; renderAccount(); }
   if (a === 'nodel'){ accConfirmDel = false; renderAccount(); }
-  if (a === 'del2'){ await SRV.deleteAccount(); closeSheets(); renderSettings(); toast('Аккаунт удалён'); }
+  accBusy = true;
+  try {
+    if (a === 'public'){ await SRV.setPublic(!me.public); renderAccount(); renderSettings(); toast(!me.public ? 'Ваши рекорды видны всем' : 'Ваши рекорды видят только друзья'); }
+    if (a === 'unfriend'){ await SRV.removeFriend(t.dataset.id); renderAccount(); toast('Удалено из друзей'); }
+    if (a === 'del2'){ await SRV.deleteAccount(); closeSheets(); renderSettings(); toast('Аккаунт удалён'); }
+  } catch { netErr(); }
+  accBusy = false;
 });
 let nickT = 0;
 $('accBody').addEventListener('input', e => {
@@ -1355,23 +1349,28 @@ $('accBody').addEventListener('input', e => {
   const n = e.target.value.trim(), h = $('nickHint'), bad = nickProblem(n);
   h.className = 'hintline' + (bad ? ' bad' : ''); h.textContent = bad || 'Проверяем…';
   clearTimeout(nickT); if (bad) return;
-  nickT = setTimeout(async () => { const free = await SRV.nickFree(n); if ($('accNick')?.value.trim() !== n) return; h.className = 'hintline ' + (free ? 'ok' : 'bad'); h.textContent = free ? '✓ Ник свободен' : 'Этот ник уже занят'; }, 250);
+  nickT = setTimeout(async () => { let free; try { free = await SRV.nickFree(n); } catch { h.className = 'hintline'; h.textContent = ''; return; } if ($('accNick')?.value.trim() !== n) return; h.className = 'hintline ' + (free ? 'ok' : 'bad'); h.textContent = free ? '✓ Ник свободен' : 'Этот ник уже занят'; }, 250);
 });
 $('accBody').addEventListener('submit', async e => {
   e.preventDefault();
-  if (e.target.id === 'emailForm'){ accEmail = $('accEmail').value.trim(); await SRV.signIn('email', accEmail); toast(SRV.demo ? 'Демо: вход выполнен сразу' : 'Письмо со ссылкой отправлено'); accStep = SRV.me().nick ? 'manage' : 'nick'; renderAccount(); renderSettings(); }
-  if (e.target.id === 'nickForm'){
-    const n = $('accNick').value.trim(), bad = nickProblem(n); if (bad) return;
-    try { await SRV.setNick(n); } catch { $('nickHint').className = 'hintline bad'; $('nickHint').textContent = 'Этот ник уже занят'; return; }
-    store.set('name', n); accStep = 'manage'; renderAccount(); renderSettings(); toast(`Привет, ${n}! 🦊`);
-    if (S.end && !S.saved) win();
+  if (e.target.id !== 'nickForm' || accBusy) return;
+  const n = $('accNick').value.trim(), bad = nickProblem(n), h = $('nickHint'); if (bad) return;
+  accBusy = true; $('nickSave').disabled = true;
+  try { await SRV.setNick(n); }
+  catch (err){
+    h.className = 'hintline bad';
+    h.textContent = err.message === 'taken' ? 'Этот ник уже занят' : err.message === 'nick_bad' ? 'Такой ник нельзя, выберите другой' : err.message === 'nick_format' ? 'От 3 до 16 символов: буквы, цифры, «_» и «-»' : 'Нет связи с сервером. Попробуйте ещё раз';
+    accBusy = false; $('nickSave').disabled = false; return;
   }
+  accBusy = false;
+  store.set('name', n); accStep = 'manage'; renderAccount(); renderSettings(); toast(`Привет, ${n}! 🦊`);
+  if (S.end && (!S.saved || (S.daily && !S.sent))) win();
 });
 function renderAccountRow(){
   const me = SRV.me();
   $('accGroup').innerHTML = me && me.nick
-    ? `<button class="row" id="accOpen"><span class="ava2">${esc(me.nick[0].toUpperCase())}</span><span class="rt"><b>${esc(me.nick)}</b><span>${me.public ? 'Участвует в общих таблицах' : 'Рекорды скрыты от других'}</span></span><span class="chev">›</span></button>`
-    : `<button class="row" id="accOpen"><span class="ri">👤</span><span class="rt"><b>Войти</b><span>Общие таблицы рекордов, друзья и ваше место среди всех игроков</span></span><span class="chev">›</span></button>`;
+    ? `<button class="row" id="accOpen"><span class="ava2">${esc(me.nick[0].toUpperCase())}</span><span class="rt"><b>${esc(me.nick)}</b><span>${me.public ? 'Участвует в общей таблице' : 'Рекорды видят только друзья'}</span></span><span class="chev">›</span></button>`
+    : `<button class="row" id="accOpen"><span class="ri">👤</span><span class="rt"><b>Общая таблица</b><span>Придумайте ник: игра дня, друзья и ваше место среди всех</span></span><span class="chev">›</span></button>`;
   $('accOpen').onclick = openAccount;
 }
 $('winSignIn').onclick = openAccount;
@@ -1387,14 +1386,35 @@ async function saveResult(name){
   const mine = store.get('records', []); mine.push(rec); store.set('records', mine);
   S.saved = true; persist();
   $('winForm').hidden = true; $('savedMsg').hidden = false;
+  $('savedMsg').textContent = `Результат сохранён · ${rankOf(rec, mine.filter(r => (r.level || 'classic') === S.level))}-е место среди ваших игр`;
   const me = SRV.me();
-  if (me && me.nick){
-    await SRV.submit({ level: rec.level, moves: rec.moves, ms: rec.ms, at: rec.at, daily: rec.daily });
-    const b = await SRV.board({ level: S.level, scope: S.daily ? 'daily' : 'all', period: 'all' });
-    $('savedMsg').textContent = me.public && b.mine ? `В общей таблице: ${b.mine.rank}-е место из ${b.total}${S.daily ? ' в игре дня' : ''}` : 'Результат сохранён. Ваши рекорды скрыты от других (это можно поменять в аккаунте).';
-  } else {
-    $('savedMsg').textContent = `Результат сохранён · ${rankOf(rec, mine.filter(r => (r.level || 'classic') === S.level))}-е место среди ваших игр`;
+  if (me?.nick && S.daily) sendDaily();
+  else if (me?.nick) $('savedMsg').textContent += '. В общую таблицу попадают игры дня (⚙️ → Игра дня)';
+}
+// signed-in players: the first daily attempt goes to the shared table, the server re-checks the game
+async function sendDaily(){
+  const msg = t => { $('savedMsg').hidden = false; $('savedMsg').textContent = t; };
+  if (S.replay) return msg('Игру дня вы сегодня уже проходили: в общую таблицу идёт только первая попытка');
+  const game = { level: S.level, day: S.daily, ms: elapsed(), hints: !!S.hintsEver, opened: S.opened.slice() };
+  if (!S.sent){
+    msg('Отправляем в общую таблицу…');
+    try { const r = await SRV.submitDaily(game); S.sent = r.status; persist(); }
+    catch (e){
+      if (e.message === 'net'){ store.set('pendingDaily', game); return msg('Нет связи с сервером. Отправим результат, когда связь появится'); }
+      return msg(e.message === 'day' ? 'Эта игра дня уже закончилась, результат сохранён у вас' : e.message === 'invalid' ? 'Сервер не принял эту партию' : 'Не удалось отправить результат');
+    }
   }
+  if (S.sent === 'already') return msg('В общую таблицу идёт только первая попытка дня');
+  try {
+    const b = await SRV.board({ level: S.level, day: S.daily, scope: 'all' }), pct = beatPct(b);
+    if (b.mine) msg(`Игра дня: ${b.mine.rank}-е место из ${b.total}${pct != null ? ` · вы лучше ${pct}% игроков` : ''}`);
+  } catch { msg('Результат отправлен в общую таблицу'); }
+}
+// a daily result that could not be sent (no network) is retried on the next start
+async function sendPending(){
+  const g = store.get('pendingDaily', null); if (!g || !SRV.me()?.nick) return;
+  try { await SRV.submitDaily(g); store.set('pendingDaily', null); }
+  catch (e){ if (e.message !== 'net') store.set('pendingDaily', null); }
 }
 function sortRecs(list){ return list.slice().sort((a, b) => a.moves - b.moves || (a.ms || 0) - (b.ms || 0) || a.at - b.at); }
 function rankOf(rec, list){
@@ -1403,7 +1423,7 @@ function rankOf(rec, list){
 }
 
 // ---------- records ----------
-let recPane = 'rec', recTab = SRV.me()?.nick ? 'all' : 'mine', recPeriod = 'all', recLevel = 'classic', recMode = 'idle', picked = new Set(), boardReq = 0;
+let recPane = 'rec', recTab = SRV.me()?.nick ? 'daily' : 'mine', recPeriod = '0', recLevel = 'classic', recMode = 'idle', picked = new Set(), boardReq = 0;
 const seg = $('seg');
 seg.addEventListener('click', e => { const v = e.target.closest('button')?.dataset.v; if (!v) return; recTab = v; recMode = 'idle'; picked.clear(); renderRecords(); });
 $('perSegR').addEventListener('click', e => { const v = e.target.closest('button')?.dataset.v; if (!v) return; recPeriod = v; renderRecords(); });
@@ -1427,43 +1447,42 @@ function renderRecords(){
   $('paneRec').hidden = recPane !== 'rec'; $('paneStats').hidden = recPane !== 'stats'; $('paneBadges').hidden = recPane !== 'rec';
   if (recPane === 'stats') renderStats();
   segSet(seg, recTab); segSet($('lvlSeg'), recLevel);
-  $('perSegR').hidden = !(recTab === 'all' || recTab === 'friends'); segSet($('perSegR'), recPeriod);
+  $('perSegR').hidden = recTab === 'mine'; segSet($('perSegR'), recPeriod);
   renderBadges();
   if (recTab === 'mine') return renderMine();
-  // shared tables
+  // shared tables: the daily game of today / yesterday
   recMode = 'idle'; $('clearBox').innerHTML = ''; $('recList').classList.remove('picking');
-  const me = SRV.me(), signed = !!(me && me.nick), req = ++boardReq;
+  const me = SRV.me(), signed = !!(me && me.nick), req = ++boardReq, mr = $('meRow');
+  const lvName = LEVELS[recLevel].name, when = recPeriod === '1' ? 'Вчера' : 'Сегодня';
+  const cta = text => { mr.className = 'cta'; mr.hidden = false; mr.innerHTML = `<span>${text}</span><button id="meIn">Придумать ник</button>`; $('meIn').onclick = openAccount; };
   if (recTab === 'friends' && !signed){
-    showPages([], 'Войдите в аккаунт, чтобы соревноваться с друзьями.');
-    $('meRow').className = 'cta'; $('meRow').hidden = false; $('meRow').innerHTML = '<span>Друзья видят результаты друг друга</span><button id="meIn">Войти</button>'; $('meIn').onclick = openAccount;
-    $('recNote').textContent = ''; return;
+    showPages([], 'Друзья видят результаты друг друга в игре дня.');
+    cta('Чтобы добавить друзей, нужен ник'); $('recNote').textContent = ''; return;
   }
-  SRV.board({ level: recLevel, scope: recTab, period: recPeriod }).then(b => {
+  $('recNote').textContent = '';
+  showPages([], 'Загружаем…'); mr.hidden = true;
+  SRV.board({ level: recLevel, day: dayKey(+recPeriod), scope: recTab === 'friends' ? 'friends' : 'all' }).then(b => {
     if (req !== boardReq) return;
     const rows = b.rows.map(r => `<div class="rec${r.rank <= 3 ? ' p' + r.rank : ''}${r.me ? ' me' : ''}">
       <span class="ck"></span><span class="pl">${r.rank}</span>
-      <span class="nm">${esc(r.nick)}${r.me ? ' (вы)' : ''}<span class="dt">${whenOf(r.at)} · ${fmt(r.ms)}</span></span>
+      <span class="nm">${esc(r.nick)}${r.me ? ' (вы)' : ''}<span class="dt">${fmt(r.ms)}${r.streak >= 2 ? ` · 🔥 ${r.streak} ${plural(r.streak, 'день', 'дня', 'дней')}` : ''}${r.hints ? '' : ' · 🧠 без подсказок'}</span></span>
       <span class="mv">${r.moves}<small>${plural(r.moves, 'ход', 'хода', 'ходов')}</small></span></div>`);
-    const empty = recTab === 'friends'
-      ? `Здесь появятся ваши друзья.<br>Попросите у друга код и введите его ниже.${SRV.demo ? `<br><small>Для пробы: ${SRV.sampleCode()}</small>` : ''}`
-      : recTab === 'daily' ? `Сегодня игру дня на уровне «${LEVELS[recLevel].name}» ещё никто не прошёл.` : 'Пока пусто.';
-    showPages(rows, empty);
-    const mr = $('meRow');
-    if (!signed){ mr.className = 'cta'; mr.hidden = false; mr.innerHTML = '<span>Узнайте своё место среди всех</span><button id="meIn">Войти</button>'; $('meIn').onclick = openAccount; }
+    showPages(rows, recTab === 'friends' ? 'Здесь появятся ваши друзья.<br>Попросите у друга код и введите его ниже.'
+      : `${when} игру дня на уровне «${lvName}» ещё никто не прошёл.${recPeriod === '0' ? '<br>Будьте первым!' : ''}`);
+    const pct = beatPct(b);
+    if (!signed) cta('Узнайте своё место среди всех');
     else if (b.mine && !b.rows.some(r => r.me)){ mr.className = ''; mr.hidden = false; mr.innerHTML = `<span class="pl">${b.mine.rank}</span><span class="nm">Вы · ${esc(me.nick)}<span>${b.mine.rank} место из ${b.total}</span></span><span class="mv">${b.mine.moves}</span>`; }
-    else if (!b.mine && signed){ mr.className = 'cta'; mr.hidden = false; mr.innerHTML = `<span>${me.public ? 'Пройдите уровень, чтобы попасть в таблицу' : 'Ваши рекорды скрыты от других'}</span>`; }
+    else if (!b.mine){ mr.className = 'cta'; mr.hidden = false; mr.innerHTML = `<span>${recPeriod === '0' ? `Пройдите игру дня «${lvName}», чтобы попасть в таблицу` : `Вчера вы не играли на уровне «${lvName}»`}</span>`; }
     else mr.hidden = true;
-    if (recTab === 'friends' && signed){
-      $('clearBox').innerHTML = `<form class="addfriend" id="addFriend" style="width:100%"><input id="friendCode" placeholder="Код друга, LIS-XXXX" maxlength="8" autocomplete="off"><button type="submit">Добавить</button></form>`;
-    }
-    $('recNote').textContent = (recTab === 'daily' ? 'Игра дня: у всех сегодня одна расстановка. ' : `Лучший результат каждого игрока${recPeriod === 'week' ? ' за неделю' : ''}. `) + (SRV.demo ? 'Демо: соперники ненастоящие.' : '');
-  });
+    if (recTab === 'friends') $('clearBox').innerHTML = `<form class="addfriend" id="addFriend" style="width:100%"><input id="friendCode" placeholder="Код друга, LIS-XXXX" maxlength="8" autocomplete="off"><button type="submit">Добавить</button></form>`;
+    $('recNote').textContent = `У всех одна расстановка, в зачёт идёт первая попытка дня.${pct != null ? ` Вы лучше ${pct}% ${recTab === 'friends' ? 'друзей' : 'игроков'}.` : ''}${signed && !me.public && recTab !== 'friends' ? ' Вас видят только друзья.' : ''}`;
+  }).catch(() => { if (req === boardReq){ showPages([], 'Нет связи с сервером.<br>Проверьте интернет и откройте вкладку ещё раз.'); mr.hidden = true; } });
 }
 $('clearBox').addEventListener('submit', async e => {
   if (e.target.id !== 'addFriend') return; e.preventDefault();
   const c = $('friendCode').value.trim(); if (!c) return;
   try { const nick = await SRV.addFriend(c); toast(`${nick} теперь ваш друг 🦊`); renderRecords(); }
-  catch (err) { toast(err.message === 'self' ? 'Это ваш собственный код' : 'Игрок с таким кодом не найден'); }
+  catch (err) { toast(err.message === 'self' ? 'Это ваш собственный код' : err.message === 'net' ? 'Нет связи с сервером' : 'Игрок с таким кодом не найден'); }
 });
 function renderMine(){
   $('meRow').hidden = true;
@@ -1679,6 +1698,7 @@ function start(data){
   S.pausedMs = S.pausedMs || 0; S.pauseAt = S.pauseAt || 0; S.marks = S.marks || {};
   if (S.start && !S.end && !S.pauseAt) S.pauseAt = S.lastSeen || Date.now();
   buildBoard(); prevDead = new Set(); render(false);
+  SRV.refresh().then(() => { renderSettings(); sendPending(); });
 }
 { const sp = $('splash'), hide = () => sp.classList.add('hide'); sp.onclick = hide; setTimeout(hide, calm() ? 300 : 1900); }
 window.claude?.hot?.snapshot?.(() => ({ game: S }));
