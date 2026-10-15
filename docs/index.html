@@ -579,7 +579,7 @@ html.calm *,html.calm *::before,html.calm *::after{animation:none!important;tran
       <li><span class="ic">🌳</span><span>Под каждым деревом может прятаться лиса.</span></li>
       <li><span class="ic"><span class="demo" style="grid-template-columns:repeat(2,13px);gap:2px"><i class="d" style="width:13px;height:13px;border-radius:4px"></i><i class="d" style="width:13px;height:13px;border-radius:4px"></i></span></span><span>С подсказками: когда цифра «нашла» всех своих лис, она зачёркивается, а все её линии штрихуются. Лис там больше нет, и нажать на эти клетки нельзя.</span></li>
       <li><span class="ic">👆</span><span>Удерживайте открытую цифру, чтобы подсветить её линии.</span></li>
-      <li><span class="ic">🪵</span><span>Свои пометки (включаются в настройках): удерживайте дерево (на компьютере — правый клик). Первый раз ставится пенёк 🪵 («лисы нет»), второй — ❓ («тут, наверное, лиса»), третий убирает пометку. Пометки не считаются ходами, а клетку с пеньком нельзя открыть случайно.</span></li>
+      <li><span class="ic">🪵</span><span>Свои пометки (включаются в настройках): <span class="mkhow">удерживайте дерево</span>. Первый раз ставится пенёк 🪵 («лисы нет»), второй — ❓ («тут, наверное, лиса»), третий убирает пометку. Пометки не считаются ходами, а клетку с пеньком нельзя открыть случайно.</span></li>
       <li><span class="ic">⏸</span><span>Нажмите на время, чтобы поставить игру на паузу. Пока пауза, поле скрыто.</span></li>
       <li><span class="ic">⚙️</span><span>В настройках: уровень сложности, игра дня, пометки, тёмная тема, звуки и позы лис.</span></li>
     </ul>
@@ -623,7 +623,7 @@ html.calm *,html.calm *::before,html.calm *::after{animation:none!important;tran
     <div class="sect">Игра</div>
     <div class="group">
       <button class="row" role="switch" id="optDaily" aria-checked="false"><span class="ri">📅</span><span class="rt"><b>Игра дня</b><span>Одна расстановка на весь день, одинаковая у всех. Можно сравнить результат с друзьями.</span></span><i class="switch"></i></button>
-      <button class="row" role="switch" id="optMarks" aria-checked="false"><span class="ri">🪵</span><span class="rt"><b>Пометки на деревьях</b><span>Удерживайте дерево: пенёк 🪵 «лисы нет», ещё раз — ❓ «может быть», ещё раз — снять.</span></span><i class="switch"></i></button>
+      <button class="row" role="switch" id="optMarks" aria-checked="false"><span class="ri">🪵</span><span class="rt"><b>Пометки на деревьях</b><span><span class="mkHow">Удерживайте дерево</span>: пенёк 🪵 «лисы нет», ещё раз — ❓ «может быть», ещё раз — снять.</span></span><i class="switch"></i></button>
       <button class="row" role="switch" id="optPoses" aria-checked="true"><span class="ri">🦊</span><span class="rt"><b>Лисы прячутся по-разному</b><span>Одна спит, другая машет лапой, третья ест яблоко.</span></span><i class="switch"></i></button>
       <div class="poses" id="posePreview" aria-hidden="true"></div>
       <button class="row" role="switch" id="optMotion" aria-checked="false" hidden><span class="ri">🎆</span><span class="rt"><b>Анимации</b><span>На телефоне включено «Уменьшение движения», поэтому салют и танцы лис выключены. Включите, чтобы видеть их в этой игре.</span></span><i class="switch"></i></button>
@@ -850,7 +850,7 @@ function render(animate = true){
   }
   $('hint').textContent = S.end ? 'Все лисы найдены! Начните новую игру или сохраните результат.'
     : S.opened.length === 0 ? `Нажмите на любую клетку леса. Здесь прячутся ${FOXES} ${plural(FOXES, 'лиса', 'лисы', 'лис')}. Цифра покажет, сколько их на той же горизонтали, вертикали и диагоналях.`
-    : S.hints ? 'Заштрихованные клетки пустые: туда можно не ходить. ' + (SET.marks ? 'Удерживайте дерево, чтобы поставить пенёк 🪵 или ❓.' : 'Удерживайте цифру, чтобы увидеть её линии.')
+    : S.hints ? 'Заштрихованные клетки пустые: туда можно не ходить. ' + (SET.marks ? MK.How + ', чтобы поставить пенёк 🪵 или ❓.' : 'Удерживайте цифру, чтобы увидеть её линии.')
     : 'Подсказки выключены: все клетки доступны.';
   const dd = S.daily ? new Date(S.daily + 'T12:00') : null;
   $('lvlChip').textContent = `${LV.icon} ${LV.name} · ${N}×${N}`;
@@ -982,6 +982,12 @@ board.addEventListener('click', e => {
   openCell(i);
 });
 
+// mouse: right-click a tree; touch: long-press it
+const MK = matchMedia('(hover: hover) and (pointer: fine)').matches
+  ? { how: 'щёлкните по дереву правой кнопкой мыши', How: 'Щёлкните по дереву правой кнопкой мыши' }
+  : { how: 'удерживайте дерево', How: 'Удерживайте дерево' };
+document.querySelectorAll('.mkhow').forEach(e => e.textContent = MK.how);
+document.querySelectorAll('.mkHow').forEach(e => e.textContent = MK.How);
 // player's own marks on closed cells: 🪵 "no fox" → ❓ "maybe a fox" → none (not a move)
 function cycleMark(i){
   if (!SET.marks || S.end || S.pauseAt || S.opened.includes(i) || (S.hints && analyse().dead.has(i))) return;
@@ -1092,7 +1098,7 @@ $('levelGroup').addEventListener('click', e => {
 $('optDaily').onclick = () => { SET.daily = !SET.daily; saveSet(); renderSettings(); newGame(); toast(SET.daily ? 'Игра дня: у всех сегодня одна расстановка' : 'Обычная игра: лисы прячутся случайно'); };
 $('optPoses').onclick = () => { SET.poses = !SET.poses; saveSet(); renderSettings(); render(false); };
 $('optMotion').onclick = () => { SET.motion = !SET.motion; saveSet(); applyMotion(); renderSettings(); if (SET.motion) toast('Анимации включены 🎆'); };
-$('optMarks').onclick = () => { SET.marks = !SET.marks; saveSet(); renderSettings(); render(false); toast(SET.marks ? 'Пометки включены: удерживайте дерево' : 'Пометки выключены'); };
+$('optMarks').onclick = () => { SET.marks = !SET.marks; saveSet(); renderSettings(); render(false); toast(SET.marks ? 'Пометки включены: ' + MK.how : 'Пометки выключены'); };
 $('optSound').onclick = () => { SET.sound = !SET.sound; saveSet(); renderSettings(); if (SET.sound) sfx('fox'); };
 $('themeSeg').addEventListener('click', e => { const v = e.target.closest('button')?.dataset.v; if (!v) return; SET.theme = v; saveSet(); applyTheme(); segSet($('themeSeg'), v); });
 
