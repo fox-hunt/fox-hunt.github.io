@@ -1,13 +1,24 @@
 ОХОТА НА ЛИС · версия 2.0
-Проверенная рабочая версия (14 октября 2026)
+Обновлено 15 октября 2026: общая таблица, вход через Telegram, игра в Telegram
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-ССЫЛКА НА ИГРУ (для всех)
-https://fox-hunt.github.io
+ГДЕ ИГРАТЬ (аккаунт один и тот же, если войти через Telegram)
+
+В браузере (телефон или компьютер):   https://fox-hunt.github.io
+В Telegram (открывается прямо там):   https://t.me/FoxHuntGameBot?startapp
+Чат с ботом (кнопки «Играть», «Таблица дня», «Поделиться»):   https://t.me/FoxHuntGameBot
+
+КАК ПЕРЕХОДИТЬ ТУДА-СЮДА
+• Браузер → Telegram: ⚙️ Настройки → «Играть в Telegram». Вход в Telegram — сам.
+• Telegram → браузер: ⚙️ Настройки → «Открыть в браузере». Браузер сразу войдёт в тот же аккаунт.
+• Первый вход в браузере: ⚙️ → «Общая таблица» → «Войти через Telegram» → в боте «Start» → вернуться.
+• Поделиться: ⚙️ → «Поделиться игрой», или кнопка «📤 Поделиться игрой» в боте.
 
 ТЕКСТ ДЛЯ ОТПРАВКИ ДРУЗЬЯМ
-🦊 Сыграй в «Охоту на лис»! Найди всех лис в лесу за наименьшее число ходов: https://fox-hunt.github.io
+🦊 Сыграй в «Охоту на лис» — логическая игра: найди всех лис в лесу! Игра дня одна для всех, давай сравним результаты.
+В Telegram: https://t.me/FoxHuntGameBot?startapp
+В браузере: https://fox-hunt.github.io
 
 КАК ПОСТАВИТЬ НА ТЕЛЕФОН ИКОНКОЙ
 • iPhone: открыть ссылку в Safari → «Поделиться» → «На экран „Домой“» → «Добавить»
@@ -20,16 +31,24 @@ http://localhost:8790
 Запуск: двойной щелчок по файлу «Запустить локально.command» в этой папке.
 Остановить: закрыть окно Терминала.
 С телефона в той же Wi-Fi: http://<адрес Mac>:8790  (адрес меняется: дома был 10.0.1.80, через iPhone-модем 172.20.10.5)
+Вход через Telegram работает и на локальной версии.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ДЛЯ РАЗРАБОТКИ
-Репозиторий:  https://github.com/fox-hunt/fox-hunt.github.io
-Организация:  https://github.com/fox-hunt
-Версия 2.0:   https://github.com/fox-hunt/fox-hunt.github.io/releases/tag/v2.0
+Репозиторий:   https://github.com/fox-hunt/fox-hunt.github.io
+Организация:   https://github.com/fox-hunt
+Версия 2.0:    https://github.com/fox-hunt/fox-hunt.github.io/releases/tag/v2.0
 
-Исходник игры — index.html, иконки — assets/.
+Supabase (база, вход, функция бота):  https://supabase.com/dashboard/project/ctzapxazhaaddgghztqw
+  · Table Editor → profiles (игроки и ники), results (результаты игры дня)
+  · Storage → avatars (аватарки; неприличную можно удалить)
+  · Edge Functions → tg (бот и вход через Telegram)
+  Аккаунт Supabase, пароли и ключи — в файле «Доступы — не в git.txt» (не попадает на GitHub).
+Бот: @FoxHuntGameBot, настройки — в @BotFather → /mybots.
+
+Исходник игры — index.html, иконки — assets/, сервер — supabase/ (SQL и функция tg).
 После правок: ./build.sh (собирает сайт в docs/), затем git commit и git push —
 через 1–2 минуты изменения на сайте.
 
-Разработчик: Ирина Мальцева · maltsevaie@gmail.com
+Разработчик: Ирина Мальцева · maltsevaie@gmail.com · Telegram @iLazovich

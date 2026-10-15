@@ -659,6 +659,7 @@ html.in-tg [data-a="out"],html.in-tg [data-a="tg"],html.in-tg .authbtn[data-a="t
 
     <div class="group" id="whereGroup">
       <a class="row" id="playTg" href="https://t.me/FoxHuntGameBot?startapp" target="_blank" rel="noopener"><span class="ri" id="playTgIc"></span><span class="rt"><b>Играть в Telegram</b><span>Игра прямо в Telegram, тот же аккаунт и рейтинг</span></span><span class="ri" aria-hidden="true">›</span></a>
+      <button class="row" id="shareGame"><span class="ri">📤</span><span class="rt"><b>Поделиться игрой</b><span>Отправить ссылку друзьям</span></span><span class="ri" aria-hidden="true">›</span></button>
       <button class="row" id="playWeb" hidden><span class="ri">🌐</span><span class="rt"><b>Открыть в браузере</b><span>fox-hunt.github.io: тот же аккаунт, если войти через Telegram</span></span><span class="ri" aria-hidden="true">›</span></button>
     </div>
     <div class="group" id="installGroup" hidden>
@@ -1987,6 +1988,13 @@ function tgWhere(){
   };
   // where to play: Telegram ↔ browser, one account
   tgWhere();
+  $('shareGame').onclick = async () => {
+    const text = '🦊 Сыграй в «Охоту на лис» — логическая игра: найди всех лис в лесу! Игра дня одна для всех, давай сравним результаты.';
+    const link = inTG ? 'https://t.me/FoxHuntGameBot?startapp' : 'https://fox-hunt.github.io/';
+    if (inTG && TGW?.openTelegramLink){ TGW.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent(text)); return; }
+    if (navigator.share){ try { await navigator.share({ title: 'Охота на лис', text, url: link }); } catch {} return; }
+    try { await navigator.clipboard.writeText(text + ' ' + link); toast('Ссылка скопирована, отправьте её друзьям'); } catch { toast(link); }
+  };
   $('playWeb').onclick = async () => {
     let url = 'https://fox-hunt.github.io/';
     try {

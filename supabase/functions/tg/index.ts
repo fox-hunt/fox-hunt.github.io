@@ -18,11 +18,14 @@ const SECRET = (Deno.env.get("TG_SECRET") ?? "").trim();
 const SITE = "https://fox-hunt.github.io/";
 const PUBLISHABLE = "sb_publishable_sSBwofwoUVYgoqhHx1GVUA_9Dts6BHr";   // public key: the bot reads the day table like any visitor
 const LEVELS: [string, string][] = [["kid", "🐾 Лисёнок"], ["classic", "🌲 Классика"], ["pro", "🏔 Профи"]];
+const APP_LINK = "https://t.me/FoxHuntGameBot?startapp";
+const SHARE = "https://t.me/share/url?url=" + encodeURIComponent(APP_LINK) +
+  "&text=" + encodeURIComponent("🦊 Сыграй в «Охоту на лис» — логическая игра: найди всех лис в лесу! Игра дня одна для всех, давай сравним результаты.");
 const PLAY = { inline_keyboard: [[{ text: "🦊 Играть", web_app: { url: SITE } }]] };
 const MENU = { inline_keyboard: [
   [{ text: "🦊 Играть", web_app: { url: SITE } }],
   [{ text: "🏆 Таблица дня", callback_data: "top" }, { text: "❓ Как играть", callback_data: "help" }],
-  [{ text: "🧹 Очистить чат", callback_data: "clear" }],
+  [{ text: "📤 Поделиться игрой", url: SHARE }, { text: "🧹 Очистить чат", callback_data: "clear" }],
 ] };
 const fmtMs = (ms: number) => { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 const moves = (n: number) => n % 10 === 1 && n % 100 !== 11 ? "ход" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "хода" : "ходов";
