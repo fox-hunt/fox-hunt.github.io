@@ -1,6 +1,6 @@
 # Supabase (бесплатный тариф) засыпает после недели без запросов.
 # Раз в день спрашиваем у базы таблицу игры дня — проект остаётся активным.
-# keepalive-workflow не даёт GitHub выключить это расписание через 60 дней тишины в репозитории.
+# Последний шаг заново включает расписание: GitHub выключает его после 60 дней тишины в репозитории.
 name: Supabase keep-alive
 on:
   schedule:
@@ -20,4 +20,7 @@ jobs:
             -d "{\"p_level\":\"classic\",\"p_day\":\"$(date -u +%F)\"}")
           echo "HTTP $code"; head -c 300 /tmp/r.json; echo
           test "$code" = 200
-      - uses: gautamkrishnar/keepalive-workflow@v2
+      - name: Не дать GitHub выключить расписание
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/keepalive.yml/enable"
