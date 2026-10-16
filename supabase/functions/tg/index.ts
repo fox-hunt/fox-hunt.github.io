@@ -200,10 +200,11 @@ function reminder(d: { linked: boolean; streak: number; first: boolean }, player
   let t = d.linked ? "🦊 Игра дня ждёт! Вы ещё не охотились сегодня." : "🦊 В лесу новая игра дня — одна расстановка для всех.";
   t += players ? `\n🏆 В таблице уже ${players} ${hunters(players)} — попробуйте их обойти.` : "\n🏆 Таблица пока пуста — можно стать первым!";
   if (d.streak >= 2) t += `\n🔥 Ваша серия: ${d.streak} ${days(d.streak)} подряд — не прерывайте!`;
-  if (d.first) t += "\n\nНапоминание приходит раз в день, только если игра дня ещё не сыграна. Время можно поменять или выключить — кнопками ниже.";
+  if (d.first) t += "\n\nТеперь бот будет напоминать раз в день, если игра дня ещё не сыграна. Не нужно — нажмите «🔕 Отключить напоминания» ниже.";
   return { text: t, reply_markup: { inline_keyboard: [
     [{ text: "🦊 Играть", web_app: { url: SITE } }],
-    [{ text: "⏰ Время", callback_data: "remind" }, { text: "🔕 Не напоминать", callback_data: "rh:off" }],
+    [{ text: "🔕 Отключить напоминания", callback_data: "rh:off" }],
+    [{ text: "⏰ Другое время", callback_data: "remind" }],
   ] } };
 }
 // called every hour by pg_cron; body.hour / body.chat — for a manual check

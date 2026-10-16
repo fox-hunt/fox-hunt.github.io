@@ -9,13 +9,15 @@ create table if not exists tg_chats (
   last_sent   date,
   sent_count  int not null default 0,
   blocked     boolean not null default false,             -- игрок остановил бота: не пишем, пока он снова не напишет
+  chosen      boolean not null default false,             -- игрок сам выбрал время в /remind
   created_at  timestamptz not null default now()
 );
+alter table tg_chats add column if not exists chosen boolean not null default false;
 alter table tg_chats enable row level security;
 revoke all on tg_chats from anon, authenticated;
 grant all on tg_chats to service_role;
 
--- все, кто уже входил через Telegram, получают напоминания (выключаются кнопкой под любым напоминанием)
+-- все, кто входил через Telegram (напоминать начнём только после первой игры дня)
 insert into tg_chats (chat_id, tg_user) select tg_id, tg_user from tg_links on conflict do nothing;
 
 -- игрок написал боту: запомнить чат (настройки не трогаем)
@@ -31,18 +33,20 @@ language plpgsql security definer set search_path = public as $$
 declare h smallint;
 begin
   insert into tg_chats (chat_id) values (p_chat) on conflict do nothing;
-  if p_set then update tg_chats set remind_hour = p_hour, blocked = false where chat_id = p_chat; end if;
+  if p_set then update tg_chats set remind_hour = p_hour, blocked = false, chosen = true where chat_id = p_chat; end if;
   select remind_hour into h from tg_chats where chat_id = p_chat;
   return json_build_object('hour', h);
 end $$;
 
--- кому напомнить в этот час: не напоминали сегодня и ещё не сыграли игру дня
+-- кому напомнить в этот час: кто хоть раз играл игру дня (или сам включил в /remind),
+-- сегодня ещё не получал напоминание и ещё не сыграл
 create or replace function tg_remind_due(p_hour int, p_day date) returns json
 language sql stable security definer set search_path = public as $$
   with due as (
     select c.chat_id, c.sent_count, l.user_id
     from tg_chats c left join tg_links l on l.tg_id = c.chat_id
     where c.remind_hour = p_hour and not c.blocked and (c.last_sent is null or c.last_sent < p_day)
+      and (c.chosen or exists (select 1 from results r where r.user_id = l.user_id))
   )
   select json_build_object(
     'players', (select count(distinct user_id) from results where game_day = p_day and not flagged),
