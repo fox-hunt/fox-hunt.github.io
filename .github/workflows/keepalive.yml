@@ -1,0 +1,23 @@
+# Supabase (бесплатный тариф) засыпает после недели без запросов.
+# Раз в день спрашиваем у базы таблицу игры дня — проект остаётся активным.
+# keepalive-workflow не даёт GitHub выключить это расписание через 60 дней тишины в репозитории.
+name: Supabase keep-alive
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+permissions:
+  actions: write
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Запрос к базе
+        run: |
+          code=$(curl -s -o /tmp/r.json -w '%{http_code}' -X POST \
+            https://ctzapxazhaaddgghztqw.supabase.co/rest/v1/rpc/day_board \
+            -H "apikey: sb_publishable_sSBwofwoUVYgoqhHx1GVUA_9Dts6BHr" -H "Content-Type: application/json" \
+            -d "{\"p_level\":\"classic\",\"p_day\":\"$(date -u +%F)\"}")
+          echo "HTTP $code"; head -c 300 /tmp/r.json; echo
+          test "$code" = 200
+      - uses: gautamkrishnar/keepalive-workflow@v2
