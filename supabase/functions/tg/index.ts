@@ -26,6 +26,7 @@ const MENU = { inline_keyboard: [
   [{ text: "🦊 Играть", web_app: { url: SITE } }],
   [{ text: "🏆 Таблица дня", callback_data: "top" }, { text: "❓ Как играть", callback_data: "help" }],
   [{ text: "📤 Поделиться игрой", url: SHARE }, { text: "🧹 Очистить чат", callback_data: "clear" }],
+  [{ text: "⏰ Напоминания", callback_data: "remind" }],
 ] };
 const fmtMs = (ms: number) => { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 const moves = (n: number) => n % 10 === 1 && n % 100 !== 11 ? "ход" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "хода" : "ходов";
@@ -51,7 +52,7 @@ const HELP = "🦊 «Охота на лис» — логическая игра 
   "В лесу прячутся лисы. Нажмите на дерево: если там лиса — она найдена, если нет — цифра покажет, " +
   "сколько лис на той же горизонтали, вертикали и диагоналях. Найдите всех лис за как можно меньше ходов.\n\n" +
   "📅 Игра дня — одна расстановка для всех, в общую таблицу идёт первая попытка.\n" +
-  "🏆 /top — таблица игры дня\n🧹 /clear — очистить переписку\n\nИграть можно здесь или в браузере: " + SITE;
+  "🏆 /top — таблица игры дня\n⏰ /remind — напоминания об игре дня\n🧹 /clear — очистить переписку\n\nИграть можно здесь или в браузере: " + SITE;
 
 const NONCE_RE = "[a-f0-9]{32}";
 const NONCE = new RegExp(`^${NONCE_RE}$`);
@@ -182,8 +183,57 @@ async function loginAs(tgId: number, tgName: string | null, tgUser: string | nul
   });
 }
 
+// ---------- daily reminders (times are Moscow time) ----------
+const HOURS = [9, 13, 19, 21];
+const mskNow = () => new Date(Date.now() + 3 * 3600e3);
+const remindText = (h: number | null) => h == null
+  ? "🔕 Напоминания выключены.\n\nХотите, чтобы бот напоминал об игре дня, если вы её ещё не сыграли? Выберите время (по Москве):"
+  : `⏰ Бот напомнит об игре дня в ${h}:00 по Москве — только если вы её ещё не сыграли.\n\nДругое время или выключить:`;
+const remindKeys = (h: number | null) => ({ inline_keyboard: [
+  HOURS.map((x) => ({ text: (x === h ? "✓ " : "") + `${x}:00`, callback_data: `rh:${x}` })),
+  [{ text: h == null ? "✓ Выключены" : "🔕 Выключить", callback_data: "rh:off" }],
+  [{ text: "🦊 Играть", web_app: { url: SITE } }],
+] });
+const days = (n: number) => n % 10 === 1 && n % 100 !== 11 ? "день" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "дня" : "дней";
+const hunters = (n: number) => n % 10 === 1 && n % 100 !== 11 ? "охотник" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "охотника" : "охотников";
+function reminder(d: { linked: boolean; streak: number; first: boolean }, players: number) {
+  let t = d.linked ? "🦊 Игра дня ждёт! Вы ещё не охотились сегодня." : "🦊 В лесу новая игра дня — одна расстановка для всех.";
+  t += players ? `\n🏆 В таблице уже ${players} ${hunters(players)} — попробуйте их обойти.` : "\n🏆 Таблица пока пуста — можно стать первым!";
+  if (d.streak >= 2) t += `\n🔥 Ваша серия: ${d.streak} ${days(d.streak)} подряд — не прерывайте!`;
+  if (d.first) t += "\n\nНапоминание приходит раз в день, только если игра дня ещё не сыграна. Время можно поменять или выключить — кнопками ниже.";
+  return { text: t, reply_markup: { inline_keyboard: [
+    [{ text: "🦊 Играть", web_app: { url: SITE } }],
+    [{ text: "⏰ Время", callback_data: "remind" }, { text: "🔕 Не напоминать", callback_data: "rh:off" }],
+  ] } };
+}
+// called every hour by pg_cron; body.hour / body.chat — for a manual check
+async function sendReminders(body: { hour?: number; chat?: number }) {
+  const now = mskNow(), day = now.toISOString().slice(0, 10), hour = body.hour ?? now.getUTCHours();
+  const { data, error } = await db.rpc("tg_remind_due", { p_hour: hour, p_day: day });
+  if (error) return json({ error: error.message }, 500);
+  let due: { chat: number; linked: boolean; streak: number; first: boolean }[] = data?.due ?? [];
+  if (body.chat) due = due.filter((d) => d.chat === body.chat);
+  const sent: number[] = [], blocked: number[] = [];
+  for (const d of due) {
+    const r = await tg("sendMessage", { chat_id: d.chat, ...reminder(d, data?.players ?? 0) }).catch(() => null);
+    if (r?.ok) sent.push(d.chat);
+    else if (r?.error_code === 403) blocked.push(d.chat);       // the player stopped the bot
+  }
+  if (sent.length || blocked.length) await db.rpc("tg_remind_sent", { p_sent: sent, p_blocked: blocked, p_day: day });
+  return json({ hour, day, due: due.length, sent: sent.length, blocked: blocked.length });
+}
+async function remindSettings(chat: number, set?: number | null, edit?: number) {
+  const { data } = await db.rpc("tg_remind", { p_chat: chat, p_hour: set ?? null, p_set: set !== undefined });
+  const h = data?.hour ?? null;
+  const msg = { chat_id: chat, text: remindText(h), reply_markup: remindKeys(h) };
+  if (edit) await tg("editMessageText", { ...msg, message_id: edit }).catch(() => null);
+  else await tg("sendMessage", msg);
+}
+
 async function botCommand(cmd: string, chat: number, lastId: number) {
-  if (cmd === "top") {
+  if (cmd === "remind") {
+    await remindSettings(chat);
+  } else if (cmd === "top") {
     await tg("sendMessage", { chat_id: chat, text: await dayTop(), reply_markup: MENU });
   } else if (cmd === "help") {
     await tg("sendMessage", { chat_id: chat, text: HELP, reply_markup: MENU, link_preview_options: { is_disabled: true } });
@@ -216,6 +266,7 @@ Deno.serve(async (req) => {
       { command: "play", description: "Открыть игру" },
       { command: "top", description: "Таблица игры дня" },
       { command: "help", description: "Как играть" },
+      { command: "remind", description: "Напоминания об игре дня" },
       { command: "clear", description: "Очистить переписку с ботом" },
     ] });
     await tg("setMyDescription", { description: "🦊 Логическая игра «Охота на лис»: найдите лис в лесу по пеленгу.\n\nИгра дня — одна расстановка для всех, общая таблица, серии и значки. Нажмите «Играть»!" });
@@ -223,6 +274,11 @@ Deno.serve(async (req) => {
     const me = await tg("getMe", {});
     const info = await tg("getWebhookInfo", {});
     return json({ webhook: hook, menu, commands: cmds, bot: me?.result?.username, updates: info?.result?.allowed_updates, pending: info?.result?.pending_update_count, last_error: info?.result?.last_error_message ?? null });
+  }
+
+  // the hourly reminder run (pg_cron → here, with TG_SECRET)
+  if (req.method === "POST" && SECRET && req.headers.get("x-fox-cron") === SECRET) {
+    return await sendReminders(await req.json().catch(() => ({})));
   }
 
   // Telegram webhook
@@ -254,12 +310,23 @@ Deno.serve(async (req) => {
           await tg("answerCallbackQuery", { callback_query_id: cq.id, text: saved || !edited?.ok ? undefined : "Не получилось, попробуйте ещё раз" }).catch(() => null);
           return json({ ok: true });
         }
+        const rh = String(cq.data || "").match(/^rh:(\d{1,2}|off)$/);
+        if (rh) {                                          // reminder time / off
+          const h = rh[1] === "off" ? null : Number(rh[1]);
+          await tg("answerCallbackQuery", { callback_query_id: cq.id, text: h == null ? "Напоминания выключены" : `Напомню в ${h}:00 по Москве` });
+          // under a reminder the message stays: settings come as a new message; in the settings message — edited in place
+          const inSettings = cq.message.reply_markup?.inline_keyboard?.some((r: { callback_data?: string }[]) => r.some((b) => b.callback_data === "rh:9"));
+          await remindSettings(cq.message.chat.id, h != null && HOURS.includes(h) ? h : null, inSettings ? cq.message.message_id : undefined);
+          return json({ ok: true });
+        }
         await tg("answerCallbackQuery", { callback_query_id: cq.id });
         await botCommand(String(cq.data || ""), cq.message.chat.id, cq.message.message_id);
         return json({ ok: true });
       }
       const m = u?.message;
       if (!m?.text || !m.from) return json({ ok: true });
+      if (m.chat.type === "private")                       // remember the chat: reminders go to those who wrote to the bot
+        try { await db.rpc("tg_seen", { p_chat: m.chat.id, p_user: m.from.username ?? null }); } catch { /* not critical */ }
       const start = m.chat.type === "private" && m.text.match(START);   // m.date: when /start was sent
       if (start) {
         // ask first: a link with someone else's code must not sign that person into this Telegram account

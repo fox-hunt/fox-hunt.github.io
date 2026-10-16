@@ -2,6 +2,7 @@
 export const T = { tg_logins: [], tg_links: [], profiles: [] };
 export const users = [];   // {id,email,anon}
 export const log = [];
+export const RPC = {};   // fake database functions: name → (args) => ({ data, error })
 export const fail = { create: false, link: false };
 let n = 0;
 class Q {
@@ -35,6 +36,7 @@ class Q {
 export function createClient(){
   return {
     from: t => new Q(t),
+    rpc: async (fn, args) => { log.push(['rpc', fn, args]); return RPC[fn] ? RPC[fn](args) : { data: null, error: null }; },
     storage: { from: () => ({ upload: async () => ({ error: null }) }) },
     auth: {
       getUser: async tok => ({ data: { user: users.find(u => u.id === tok.split('.')[1]) ?? null } }),

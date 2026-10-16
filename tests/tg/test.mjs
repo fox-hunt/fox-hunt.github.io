@@ -125,6 +125,31 @@ t('«Очистить чат» удаляет и более новые сооб�
 M.T.tg_logins.push({ nonce: 'e'.repeat(32), tg_id: 1, created_at: new Date(Date.now() - 2 * 864e5).toISOString() });
 await hook({ callback_query: { id: 'q', data: `ok:${'f'.repeat(32)}:${now}`, from: { id: 77 }, message: { message_id: 1011, chat: priv(77) } } });
 t('коды старше суток удаляются', !M.T.tg_logins.some(r => r.nonce === 'e'.repeat(32)));
+// 14. daily reminders
+const cron = (b, key = 'sec') => handler(new Request('https://f/tg', { method: 'POST', headers: { 'x-fox-cron': key }, body: JSON.stringify(b) })).then(async r => ({ s: r.status, d: await r.json() }));
+M.RPC.tg_remind_due = () => ({ data: { players: 7, due: [{ chat: 201, linked: true, streak: 4, first: true }, { chat: 202, linked: false, streak: 0, first: false }, { chat: 203, linked: true, streak: 0, first: false }] } });
+const realF = globalThis.fetch;
+globalThis.fetch = async (url, o) => { const b = o?.body ? JSON.parse(o.body) : {}; if (b.chat_id === 203) { sent.push(['sendMessage', b]); return { ok: true, json: async () => ({ ok: false, error_code: 403 }) }; } return realF(url, o); };
+sent.length = 0; M.log.length = 0;
+t('рассылка без секрета не запускается', (await cron({ action: 'remind' }, 'nope')).s === 400 && !sent.length);
+const rr = await cron({ action: 'remind', hour: 19 });
+globalThis.fetch = realF;
+const msgs = sent.filter(([m]) => m === 'sendMessage');
+t('напоминания разосланы всем, кому пора', rr.d.sent === 2 && rr.d.blocked === 1 && msgs.length === 3);
+t('в напоминании серия, число игроков и пояснение для первого раза', /серия: 4 дня/.test(msgs[0][1].text) && /7 охотников/.test(msgs[0][1].text) && /кнопками ниже/.test(msgs[0][1].text) && !/кнопками ниже/.test(msgs[1][1].text));
+t('под напоминанием «Играть» и «Не напоминать»', msgs[0][1].reply_markup.inline_keyboard.flat().some(k => k.web_app) && msgs[0][1].reply_markup.inline_keyboard.flat().some(k => k.callback_data === 'rh:off'));
+const mark = M.log.find(([k, fn]) => k === 'rpc' && fn === 'tg_remind_sent');
+t('отмечены отправленные и остановившие бота', mark && mark[2].p_sent.join() === '201,202' && mark[2].p_blocked.join() === '203');
+M.RPC.tg_remind = ({ p_hour, p_set }) => ({ data: { hour: p_set ? p_hour : 19 } });
+sent.length = 0; M.log.length = 0;
+await hook({ callback_query: { id: 'q', data: 'rh:off', from: { id: 77 }, message: { message_id: 60, chat: priv(77), reply_markup: { inline_keyboard: [[{ callback_data: 'remind' }, { callback_data: 'rh:off' }]] } } } });
+t('«Не напоминать» выключает и присылает настройки', M.log.some(([k, fn, a]) => fn === 'tg_remind' && a.p_set && a.p_hour === null) && sent.some(([m, b]) => m === 'sendMessage' && /выключены/.test(b.text)));
+sent.length = 0;
+await hook({ callback_query: { id: 'q', data: 'rh:21', from: { id: 77 }, message: { message_id: 61, chat: priv(77), reply_markup: { inline_keyboard: [[{ callback_data: 'rh:9' }]] } } } });
+t('выбор времени в настройках правит то же сообщение', sent.some(([m, b]) => m === 'editMessageText' && b.message_id === 61 && /21:00/.test(b.text) && b.reply_markup.inline_keyboard[0].some(k => k.text === '✓ 21:00')));
+sent.length = 0; M.log.length = 0;
+await hook({ message: { message_id: 10, date: now, text: '/remind', chat: priv(77), from: { id: 77, username: 'ira' } } });
+t('/remind показывает настройки и запоминает чат', sent.some(([m, b]) => m === 'sendMessage' && /19:00/.test(b.text)) && M.log.some(([, fn, a]) => fn === 'tg_seen' && a.p_chat === 77));
 // 13. unknown setup secret
 t('настройка без секрета — 404', (await handler(new Request('https://f/tg?setup=nope'))).status === 404);
 console.log(`\n${pass} из ${pass + fail} проверок прошли`);
