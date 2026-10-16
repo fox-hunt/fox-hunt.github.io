@@ -4,3 +4,7 @@
 
 # доступы и пароли
 Доступы*.txt
+
+# Supabase CLI (привязка проекта) и локальные заметки для Claude
+supabase/.temp/
+CLAUDE.local.md
