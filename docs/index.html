@@ -546,12 +546,23 @@ html.in-tg [data-a="out"],html.in-tg [data-a="tg"],html.in-tg .authbtn[data-a="t
   .app{padding-block:10px 104px}
   /* short screens (Telegram on a computer, landscape): shrink the board so the hint stays above the toolbar */
   .boardcard{width:min(100%,var(--bw,470px),max(280px,calc(100dvh - 400px - var(--tgtop,0px))))}
-  /* Telegram full screen: title and buttons in one row, so the board keeps its size */
-  html.tg-full header{grid-template-areas:"title btns";padding-top:0}
-  html.tg-full header .eyebrow{display:none}
-  html.tg-full header h1{font-size:clamp(24px,7.4vw,32px)}
-  html.tg-full .app{padding-top:calc(var(--tgtop) + 4px)}
-  html.tg-full .boardcard{width:min(100%,var(--bw,470px),max(280px,calc(100dvh - 346px - var(--tgtop,0px))))}
+  /* inside Telegram (phone and computer): title and buttons in one row, so the board gets the height */
+  html.in-tg header{grid-template-areas:"title btns";padding-top:0}
+  html.in-tg header .eyebrow{display:none}
+  html.in-tg header h1{font-size:clamp(22px,6.6vw,30px)}
+  html.in-tg .app{padding-top:calc(var(--tgtop,0px) + 6px)}
+  html.in-tg .boardcard{width:min(100%,var(--bw,470px),max(240px,calc(100dvh - 346px - var(--tgtop,0px))))}
+}
+/* Telegram on a computer: the window is short and its size is Telegram's — squeeze everything but the board */
+@media (max-width:600px) and (max-height:720px){
+  html.in-tg .wrap{gap:10px}
+  html.in-tg .stats{padding:6px}
+  html.in-tg .stat .v{font-size:19px}
+  html.in-tg .hint{font-size:12px;line-height:1.35}
+  html.in-tg .dockcap{display:none}
+  html.in-tg .dock{bottom:calc(10px + env(safe-area-inset-bottom,0px))}
+  html.in-tg .app{padding-bottom:84px}
+  html.in-tg .boardcard{width:min(100%,var(--bw,470px),max(240px,calc(100dvh - 278px - var(--tgtop,0px))))}
 }
 </style>
 
