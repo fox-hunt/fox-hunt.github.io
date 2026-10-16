@@ -502,6 +502,16 @@ html.in-tg [data-a="out"],html.in-tg [data-a="tg"],html.in-tg .authbtn[data-a="t
 #meRow.cta{justify-content:space-between;box-shadow:inset 0 0 0 1px var(--hair);background:var(--tile)}
 #meRow.cta button{height:38px;padding:0 16px;border-radius:999px;font-weight:700;font-size:14px;background:linear-gradient(150deg,var(--fox),var(--fox-2));color:#fff;flex:none}
 .addfriend{display:flex;gap:8px}
+.scopes{position:relative;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:2px;margin:-2px}
+.scopes::-webkit-scrollbar{display:none}
+.scopes button{flex:none;height:32px;font-size:13.5px;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scopes button.on{background:linear-gradient(150deg,var(--fox),var(--fox-2));color:#fff;box-shadow:none}
+.rec.net[data-id]{cursor:pointer}
+.rec .star{font-size:.8em;margin-left:4px}
+.grpbox{display:flex;flex-direction:column;gap:10px;width:100%}
+.grpbox p{margin:0;font-size:13px;color:var(--fg-2);text-align:left}
+.grpbox .addfriend input{text-transform:none}
+.grpbox .addfriend input.code{text-transform:uppercase}
 .addfriend input{flex:1;min-width:0;height:44px;border-radius:12px;border:1px solid var(--hair);background:var(--tile);color:var(--fg);padding:0 12px;font:inherit;font-size:16px;text-transform:uppercase}
 .addfriend button{height:44px;padding:0 16px;border-radius:12px;font-weight:700;background:var(--accent);color:var(--accent-ink)}
 .seg.mini#perSegR{align-self:flex-start}
@@ -702,6 +712,7 @@ html.in-tg [data-a="out"],html.in-tg [data-a="tg"],html.in-tg .authbtn[data-a="t
     <div class="pane" id="paneRec">
       <div class="seg" id="seg" style="--k:2"><i class="pill"></i><button data-v="mine">Мои</button><button data-v="daily">Игра дня</button></div>
       <div class="seg mini" id="perSegR" style="--k:2" hidden><i class="pill"></i><button data-v="0">Сегодня</button><button data-v="1">Вчера</button></div>
+      <div class="chips scopes" id="scopeRow" hidden></div>
       <div class="board-list" id="recList"></div>
       <div class="dots" id="recDots"></div>
       <div id="meRow" hidden></div>
@@ -1389,6 +1400,10 @@ const SRV = (() => {
       catch (e){ throw new Error(e.message === 'friend_self' ? 'self' : e.message === 'net' ? 'net' : 'notfound'); }
     },
     async removeFriend(id){ await rpc('remove_friend', { p_id: id }); return this.refresh(); },
+    async star(id, on){ return setMe(await rpc('star_friend', { p_id: id, p_on: !!on })); },
+    async createGroup(name){ const g = await rpc('create_group', { p_name: name }); setMe(g.profile); return g; },
+    async joinGroup(code){ const g = await rpc('join_group', { p_code: code }); setMe(g.profile); return g; },
+    async leaveGroup(id){ return setMe(await rpc('leave_group', { p_id: id })); },
     async deleteAccount(){ if (this.me()?.ava) await this.removeAvatar().catch(() => {}); await rpc('delete_account'); drop(); },
     url: URL,
     async uploadAvatar(blob){
@@ -1553,6 +1568,8 @@ function tgApp(){
   TGW = window.Telegram?.WebApp || null;
   const initData = TGW?.initData || tgHashData();
   if (!initData) return;                                      // an ordinary page in a frame, not a Mini App
+  { const sp = (TGW?.initDataUnsafe?.start_param || new URLSearchParams(initData).get('start_param') || '').match(/^join-([A-Za-z0-9]{6})$/);
+    if (sp) store.set('pendingJoin', sp[1].toUpperCase()); }    // opened from a company invitation
   inTG = true; document.documentElement.classList.add('in-tg'); tgWhere();
   try { TGW?.ready(); TGW?.expand(); TGW?.disableVerticalSwipes?.(); } catch {}
   // on a phone: the whole screen, Telegram's own bar hidden (its close / menu buttons float over the top)
@@ -1562,7 +1579,7 @@ function tgApp(){
 async function tgAppLogin(initData){
   let id = TGW?.initDataUnsafe?.user?.id; try { id = id || JSON.parse(new URLSearchParams(initData).get('user')).id; } catch {}
   const me = SRV.me();
-  if (me?.nick && me.tg && store.get('tgId', null) === id && store.get('sb.session', null)) return;   // already this player
+  if (me?.nick && me.tg && store.get('tgId', null) === id && store.get('sb.session', null)) return tryJoin();   // already this player
   try {
     const d = await SRV.tgWebApp(initData); store.set('tgId', d.tg_id);
     netStatsT = 0; store.set('netStats', null);              // the stats on screen belonged to the account before
@@ -1578,6 +1595,7 @@ async function tgAppLogin(initData){
     }
     renderSettings();
     if (SRV.me()?.nick) toast(`Привет, ${SRV.me().nick}! 🦊`); else openAccount();
+    tryJoin();
   } catch (e){ toast(e.message.startsWith('initdata') ? 'Telegram не подтвердил вход (' + e.message.split(':')[1] + '). Закройте игру и откройте снова' : e.message === 'net' ? 'Нет связи с сервером' : 'Не получилось войти через Telegram (' + e.message + ')'); }
 }
 
@@ -1682,6 +1700,7 @@ $('accBody').addEventListener('submit', async e => {
   const ph = store.get('tgPhoto', null); store.set('tgPhoto', null);
   if (ph && first && !SRV.me()?.ava){ try { await SRV.setAvatarV(ph); } catch {} }
   tgNick = ''; store.set('name', n); accStep = 'manage'; renderAccount(); renderSettings(); toast(`Привет, ${n}! 🦊`);
+  if (store.get('pendingJoin', null)) return tryJoin();
   if (S.end && (!S.saved || (S.daily && !S.sent))) win();
 });
 function renderAccountRow(){
@@ -1742,6 +1761,11 @@ function rankOf(rec, list){
 
 // ---------- records ----------
 let recPane = 'rec', recTab = SRV.me()?.nick ? 'daily' : 'mine', recPeriod = '0', recLevel = 'classic', recMode = 'idle', picked = new Set(), boardReq = 0;
+let recScope = store.get('recScope', 'all'), grpLeave = false;     // the day table: 'all' | 'friends' | 'g:<company id>' | 'new'
+const myGroups = () => SRV.me()?.groups || [];
+const groupOf = sc => sc?.startsWith('g:') ? myGroups().find(g => g.id === sc.slice(2)) : null;
+function setScope(sc){ recScope = sc; grpLeave = false; if (sc !== 'new') store.set('recScope', sc); renderRecords(); }
+$('scopeRow').addEventListener('click', e => { const v = e.target.closest('button')?.dataset.s; if (v) setScope(v); });
 const seg = $('seg');
 seg.addEventListener('click', e => { const v = e.target.closest('button')?.dataset.v; if (!v) return; recTab = v; recMode = 'idle'; picked.clear(); renderRecords(); });
 $('perSegR').addEventListener('click', e => { const v = e.target.closest('button')?.dataset.v; if (!v) return; recPeriod = v; renderRecords(); });
@@ -1771,6 +1795,16 @@ function renderRecords(){
   // shared tables: the daily game of today / yesterday
   recMode = 'idle'; $('clearBox').innerHTML = ''; $('recList').classList.remove('picking');
   const me = SRV.me(), signed = !!(me && me.nick), req = ++boardReq, mr = $('meRow');
+  if (!signed || (recScope.startsWith('g:') && !groupOf(recScope))) recScope = 'all';
+  $('scopeRow').hidden = !signed;
+  if (signed){
+    const chip = (v, t) => `<button type="button" data-s="${v}" class="${recScope === v ? 'on' : ''}">${t}</button>`;
+    $('scopeRow').innerHTML = chip('all', 'Все') + chip('friends', '⭐ Друзья') + myGroups().map(g => chip('g:' + g.id, '👥 ' + esc(g.name))).join('') + chip('new', '＋ Компания');
+    const on = $('scopeRow').querySelector('.on'), row = $('scopeRow');     // keep the chosen chip in view (scrollIntoView would shift the whole sheet)
+    if (on && (on.offsetLeft < row.scrollLeft || on.offsetLeft + on.offsetWidth > row.scrollLeft + row.clientWidth)) row.scrollLeft = on.offsetLeft - 8;
+  }
+  if (recScope === 'new') return renderNewGroup();
+  const grp = groupOf(recScope), friends = new Set((me?.friends || []).map(f => f.id));
   const lvName = LEVELS[recLevel].name, when = recPeriod === '1' ? 'Вчера' : 'Сегодня';
   const cta = text => { mr.className = 'cta'; mr.hidden = false; mr.innerHTML = `<span>${text}</span><button id="meIn">Придумать ник</button>`; $('meIn').onclick = openAccount; };
   if (recTab === 'friends' && !signed){
@@ -1779,13 +1813,15 @@ function renderRecords(){
   }
   $('recNote').textContent = '';
   showPages([], 'Загружаем…'); mr.hidden = true;
-  SRV.board({ level: recLevel, day: dayKey(+recPeriod), scope: recTab === 'friends' ? 'friends' : 'all' }).then(b => {
+  SRV.board({ level: recLevel, day: dayKey(+recPeriod), scope: recScope }).then(b => {
     if (req !== boardReq) return;
-    const rows = b.rows.map(r => `<div class="rec net${r.rank <= 3 ? ' p' + r.rank : ''}${r.me ? ' me' : ''}">
+    const rows = b.rows.map(r => `<div class="rec net${r.rank <= 3 ? ' p' + r.rank : ''}${r.me ? ' me' : ''}"${signed && !r.me ? ` data-id="${r.id}" data-nick="${esc(r.nick)}"` : ''}>
       <span class="ck"></span><span class="pl">${r.rank}</span>${avaHTML(r.id, r.ava, r.nick, 'ava3')}
-      <span class="nm">${esc(r.nick)}${r.me ? ' (вы)' : ''}<span class="dt">${fmt(r.ms)}${r.streak >= 2 ? ` · 🔥 ${r.streak} ${plural(r.streak, 'день', 'дня', 'дней')}` : ''}${r.hints ? '' : ' · 🧠 без подсказок'}</span></span>
+      <span class="nm">${esc(r.nick)}${r.me ? ' (вы)' : ''}${friends.has(r.id) ? '<span class="star" title="Друг">⭐</span>' : ''}<span class="dt">${fmt(r.ms)}${r.streak >= 2 ? ` · 🔥 ${r.streak} ${plural(r.streak, 'день', 'дня', 'дней')}` : ''}${r.hints ? '' : ' · 🧠 без подсказок'}</span></span>
       <span class="mv">${r.moves}<small>${plural(r.moves, 'ход', 'хода', 'ходов')}</small></span></div>`);
-    showPages(rows, recTab === 'friends' ? 'Здесь появятся ваши друзья.<br>Попросите у друга код и введите его ниже.'
+    showPages(rows, recScope === 'friends' && !friends.size ? 'Здесь будете вы и ваши друзья.<br>Откройте «Все» и нажмите на игрока, чтобы отметить его ⭐'
+      : recScope === 'friends' ? `${when} никто из друзей не прошёл игру дня «${lvName}».`
+      : grp ? `${when} в компании «${esc(grp.name)}» игру дня «${lvName}» ещё никто не прошёл.${recPeriod === '0' ? '<br>Будьте первым!' : ''}`
       : `${when} игру дня на уровне «${lvName}» ещё никто не прошёл.${recPeriod === '0' ? '<br>Будьте первым!' : ''}`);
     const pct = beatPct(b);
     if (!signed) cta('Узнайте своё место среди всех');
@@ -1793,9 +1829,13 @@ function renderRecords(){
     else if (!b.mine){ mr.className = 'cta'; mr.hidden = false; mr.innerHTML = `<span>${recPeriod === '0' ? `Пройдите игру дня «${lvName}», чтобы попасть в таблицу` : `Вчера вы не играли на уровне «${lvName}»`}</span>`; }
     else mr.hidden = true;
     const done = store.get('dailyDone', {})[todayKey() + '|' + recLevel];
-    if (recPeriod === '0' && !done) $('clearBox').innerHTML = `<button class="primary" id="playDaily" style="width:100%">📅 Сыграть игру дня · ${lvName}</button>`;
-    if (recTab === 'friends') $('clearBox').innerHTML = `<form class="addfriend" id="addFriend" style="width:100%"><input id="friendCode" placeholder="Код друга, LIS-XXXX" maxlength="8" autocomplete="off"><button type="submit">Добавить</button></form>`;
-    $('recNote').textContent = `У всех одна расстановка, в зачёт идёт первая попытка дня.${pct != null ? ` Вы лучше ${pct}% ${recTab === 'friends' ? 'друзей' : 'игроков'}.` : ''}${signed && !me.public ? ' Другие игроки вас не видят.' : ''}`;
+    let box = recPeriod === '0' && !done ? `<button class="primary" id="playDaily" style="width:100%">📅 Сыграть игру дня · ${lvName}</button>` : '';
+    if (grp) box += grpLeave
+      ? `<div class="grpbox"><p>Выйти из компании «${esc(grp.name)}»?${grp.n <= 1 ? ' Вы последний участник — компания исчезнет.' : ' Вернуться можно по приглашению.'}</p><div class="clear" style="width:100%"><button class="danger" data-g="leave2">Выйти</button><button data-g="noleave">Отмена</button></div></div>`
+      : `<div class="clear" style="width:100%"><button data-g="invite">📤 Позвать в компанию</button><button data-g="leave">Выйти</button></div>`;
+    $('clearBox').innerHTML = box;
+    $('recNote').textContent = grp ? `Компания «${grp.name}» · ${grp.n} ${plural(grp.n, 'участник', 'участника', 'участников')} · код ${grp.code}.${pct != null ? ` Вы лучше ${pct}% компании.` : ''}`
+      : `У всех одна расстановка, в зачёт идёт первая попытка дня.${pct != null ? ` Вы лучше ${pct}% ${recScope === 'friends' ? 'друзей' : 'игроков'}.` : ''}${signed && !me.public && recScope === 'all' ? ' Другие игроки вас не видят.' : ''}${signed && b.rows.some(r => !r.me) ? ' Нажмите на игрока, чтобы отметить ⭐ друга.' : ''}`;
   }).catch(() => { if (req === boardReq){ showPages([], 'Нет связи с сервером.<br>Проверьте интернет и откройте вкладку ещё раз.'); mr.hidden = true; } });
 }
 $('clearBox').addEventListener('click', e => {
@@ -1809,6 +1849,66 @@ $('clearBox').addEventListener('submit', async e => {
   try { const nick = await SRV.addFriend(c); toast(`${nick} теперь ваш друг 🦊`); renderRecords(); }
   catch (err) { toast(err.message === 'self' ? 'Это ваш собственный код' : err.message === 'net' ? 'Нет связи с сервером' : 'Игрок с таким кодом не найден'); }
 });
+function renderNewGroup(){
+  $('meRow').hidden = true; $('recNote').textContent = '';
+  showPages([], 'Компания — своя таблица игры дня для друзей, семьи или коллег.<br>Создайте её и отправьте приглашение в общий чат.');
+  $('clearBox').innerHTML = `<div class="grpbox">
+    <form class="addfriend" id="grpNew"><input id="grpName" placeholder="Название компании" maxlength="24" autocomplete="off"><button type="submit">Создать</button></form>
+    <p>Или вступите по коду из приглашения:</p>
+    <form class="addfriend" id="grpJoin"><input id="grpCode" class="code" placeholder="Код, 6 знаков" maxlength="6" autocomplete="off"><button type="submit">Вступить</button></form></div>`;
+}
+function inviteGroup(g){
+  const tgLink = `https://t.me/FoxHuntGameBot?startapp=join-${g.code}`, web = `https://fox-hunt.github.io/#join=${g.code}`;
+  const text = `🦊 Вступай в нашу компанию «${g.name}» в «Охоте на лис» — сравним результаты игры дня!`;
+  if (inTG && TGW?.openTelegramLink){ TGW.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(tgLink) + '&text=' + encodeURIComponent(text + `\nВ браузере: ${web}`)); return; }
+  const all = `${text}\nВ Telegram: ${tgLink}\nВ браузере: ${web}`;
+  if (navigator.share){ navigator.share({ title: 'Охота на лис', text: all }).catch(() => {}); return; }
+  navigator.clipboard.writeText(all).then(() => toast('Приглашение скопировано, отправьте его в чат'), () => toast(`Код компании: ${g.code}`));
+}
+const grpErr = m => m === 'group_notfound' ? 'Компания с таким кодом не найдена' : m === 'group_name' ? 'Название — от 2 до 24 знаков' : m === 'group_limit' ? 'Слишком много компаний' : m === 'net' ? 'Нет связи с сервером' : 'Не получилось, попробуйте ещё раз';
+$('clearBox').addEventListener('submit', async e => {
+  if (e.target.id !== 'grpNew' && e.target.id !== 'grpJoin') return; e.preventDefault();
+  const btn = e.target.querySelector('button'); btn.disabled = true;
+  try {
+    if (e.target.id === 'grpNew'){
+      const g = await SRV.createGroup($('grpName').value);
+      setScope('g:' + g.id); toast(`Компания «${g.name}» создана. Позовите друзей 📤`); inviteGroup(g);
+    } else {
+      const g = await SRV.joinGroup($('grpCode').value);
+      setScope('g:' + g.id); toast(`Вы в компании «${g.name}» 👥`);
+    }
+  } catch (err){ btn.disabled = false; toast(grpErr(err.message)); }
+});
+$('clearBox').addEventListener('click', async e => {
+  const a = e.target.closest('button')?.dataset.g, g = groupOf(recScope); if (!a || !g) return;
+  if (a === 'invite') return inviteGroup(g);
+  if (a === 'leave' || a === 'noleave'){ grpLeave = a === 'leave'; return renderRecords(); }
+  if (a === 'leave2'){ try { await SRV.leaveGroup(g.id); toast(`Вы вышли из компании «${g.name}»`); setScope('all'); } catch (err){ toast(grpErr(err.message)); } }
+});
+// ⭐ tap a player in the day table: mark / unmark as a friend
+$('recList').addEventListener('click', async e => {
+  if (recTab !== 'daily') return;
+  const row = e.target.closest('.rec[data-id]'); if (!row) return;
+  const id = row.dataset.id, on = !(SRV.me()?.friends || []).some(f => f.id === id);
+  try { await SRV.star(id, on); toast(on ? `${row.dataset.nick} — в друзьях ⭐` : `${row.dataset.nick} больше не в друзьях`); renderRecords(); }
+  catch (err){ toast(err.message === 'net' ? 'Нет связи с сервером' : 'Не получилось, попробуйте ещё раз'); }
+});
+// an invitation link (#join=CODE, or Telegram's startapp=join-CODE): join once there's a nick
+{ const m = location.hash.match(/(?:^#|&)join=([A-Za-z0-9]{6})/);
+  if (m){ store.set('pendingJoin', m[1].toUpperCase()); try { history.replaceState(null, '', location.pathname + location.search); } catch {} } }
+let joinAsked = false;
+async function tryJoin(){
+  const code = store.get('pendingJoin', null); if (!code) return;
+  if (!SRV.me()?.nick){
+    if (!inTG && !joinAsked && !store.get('tgNonce', null)){ joinAsked = true; toast('Чтобы вступить в компанию, придумайте ник'); openAccount(); }
+    return;
+  }
+  try {
+    const g = await SRV.joinGroup(code); store.set('pendingJoin', null);
+    recTab = 'daily'; recPane = 'rec'; recScope = 'g:' + g.id; store.set('recScope', recScope);
+    renderRecords(); openSheet('sheetRecords'); toast(`Вы в компании «${g.name}» 👥`);
+  } catch (err){ if (err.message !== 'net'){ store.set('pendingJoin', null); toast(grpErr(err.message)); } }
+}
 function renderMine(){
   $('meRow').hidden = true;
   const mine = store.get('records', []);
@@ -2096,7 +2196,7 @@ function start(data){
   S.pausedMs = S.pausedMs || 0; S.pauseAt = S.pauseAt || 0; S.marks = S.marks || {};
   if (S.start && !S.end && !S.pauseAt) S.pauseAt = S.lastSeen || Date.now();
   buildBoard(); prevDead = new Set(); render(false);
-  SRV.refresh().then(() => { renderSettings(); sendPending(); });
+  SRV.refresh().then(() => { renderSettings(); sendPending(); setTimeout(tryJoin, inTG ? 0 : 600); });
   if (store.get('tgNonce', null)) tgWatch();
 }
 { const sp = $('splash'), hide = () => sp.classList.add('hide'); sp.onclick = hide; setTimeout(hide, calm() ? 300 : 1900); }
