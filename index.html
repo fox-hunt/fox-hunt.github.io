@@ -1053,7 +1053,7 @@ function openCell(i){
     if (S.opened.length === 1) unlock('lucky');
     if (prevFox) unlock('double');
   } else { buzz(8); sfx('open'); }
-  if (found().length === FOXES){ S.end = Date.now(); render(); celebrate(i); foxSays(i, tierOf(S.opened.length).say); setTimeout(win, 2600); }
+  if (found().length === FOXES){ S.end = Date.now(); render(); celebrate(i); foxSays(i, tierOf(S.opened.length).say); const g = S; winT = setTimeout(() => { if (S === g) win(); }, 2600); }
   else { render(); if (isFox(i)) foxSays(i, foxLine(i)); }
   persist();
 }
@@ -1116,7 +1116,7 @@ $('btnHints').onclick = () => {
 };
 $('btnNew').onclick = () => newGame();
 function newGame(){
-  S = newState(); prevDead = new Set(); closeSheets();
+  clearTimeout(winT); S = newState(); prevDead = new Set(); closeSheets();
   buildBoard();
   board.classList.remove('shake'); void board.offsetWidth; board.classList.add('shake');
   $('wonbadge').style.setProperty('--bd', '0s');
@@ -1327,7 +1327,9 @@ $('bfx').addEventListener('click', () => {
 });
 
 // ---------- win ----------
+let winT = 0;
 function win(){
+  if (!S.end || !S.opened.length) return;                    // the victory sheet only ever shows a finished game (never a fresh one)
   const t = tierOf(S.opened.length), ti = TIERS.indexOf(t), ms = elapsed(), moves = S.opened.length;
   $('wTier').textContent = t.badge; $('wTier').dataset.t = ti;
   $('winT').textContent = t.title; $('wLine').textContent = t.line;
