@@ -1,5 +1,5 @@
 // in-memory stand-in for supabase-js: tables + auth admin
-export const T = { tg_logins: [], tg_links: [], profiles: [] };
+export const T = { tg_logins: [], tg_links: [], profiles: [], donations: [] };
 export const users = [];   // {id,email,anon}
 export const log = [];
 export const RPC = {};   // fake database functions: name → (args) => ({ data, error })
@@ -10,6 +10,7 @@ class Q {
   select(){ if (this.op === 'select') this.op = 'select'; else this.ret = true; return this; }
   eq(k, v){ this.f.push(r => r[k] === v); return this; }
   lt(k, v){ this.f.push(r => r[k] < v); return this; }
+  order(k, { ascending = true } = {}){ this.ord = [k, ascending]; return this; }
   delete(){ this.op = 'delete'; return this; }
   update(o){ this.op = 'update'; this.o = o; return this; }
   insert(o){ this.op = 'insert'; this.o = o; return this; }
@@ -17,7 +18,7 @@ class Q {
   maybeSingle(){ this.one = true; return this; }
   run(){
     const rows = T[this.t], m = r => this.f.every(f => f(r));
-    const key = this.t === 'tg_logins' ? 'nonce' : this.t === 'tg_links' ? 'tg_id' : 'id';
+    const key = this.t === 'tg_logins' ? 'nonce' : this.t === 'tg_links' ? 'tg_id' : this.t === 'donations' ? 'charge_id' : 'id';
     let data = null;
     if (this.op === 'select') data = rows.filter(m);
     else if (this.op === 'delete'){ data = rows.filter(m); T[this.t] = rows.filter(r => !m(r)); }
@@ -28,6 +29,7 @@ class Q {
       if (ex){ if (!this.opt.ignoreDuplicates) Object.assign(ex, this.o); data = this.opt.ignoreDuplicates ? [] : [ex]; }
       else { const r = { created_at: new Date().toISOString(), ...this.o }; rows.push(r); data = [r]; }
     }
+    if (this.ord && data) data = [...data].sort((a, b) => (a[this.ord[0]] < b[this.ord[0]] ? -1 : 1) * (this.ord[1] ? 1 : -1));
     if (this.one) data = data?.[0] ?? null;
     return { data, error: null };
   }

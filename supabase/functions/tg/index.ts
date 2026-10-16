@@ -18,6 +18,7 @@ const SECRET = (Deno.env.get("TG_SECRET") ?? "").trim();
 const SITE = "https://fox-hunt.github.io/";
 const PUBLISHABLE = "sb_publishable_sSBwofwoUVYgoqhHx1GVUA_9Dts6BHr";   // public key: the bot reads the day table like any visitor
 const LEVELS: [string, string][] = [["kid", "🐾 Лисёнок"], ["classic", "🌲 Классика"], ["pro", "🏔 Профи"]];
+const OWNER = 1337312153;                    // the developer's Telegram: gets each donation, /donations, payment questions
 const APP_LINK = "https://t.me/FoxHuntGameBot?startapp";
 const SHARE = "https://t.me/share/url?url=" + encodeURIComponent(APP_LINK) +
   "&text=" + encodeURIComponent("🦊 Сыграй в «Охоту на лис» — логическая игра: найди всех лис в лесу! Игра дня одна для всех, давай сравним результаты.");
@@ -26,7 +27,7 @@ const MENU = { inline_keyboard: [
   [{ text: "🦊 Играть", web_app: { url: SITE } }],
   [{ text: "🏆 Таблица дня", callback_data: "top" }, { text: "❓ Как играть", callback_data: "help" }],
   [{ text: "📤 Поделиться игрой", url: SHARE }, { text: "🧹 Очистить чат", callback_data: "clear" }],
-  [{ text: "⏰ Напоминания", callback_data: "remind" }],
+  [{ text: "⏰ Напоминания", callback_data: "remind" }, { text: "⭐ Поддержать", callback_data: "donate" }],
 ] };
 const fmtMs = (ms: number) => { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 const moves = (n: number) => n % 10 === 1 && n % 100 !== 11 ? "ход" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "хода" : "ходов";
@@ -52,7 +53,7 @@ const HELP = "🦊 «Охота на лис» — логическая игра 
   "В лесу прячутся лисы. Нажмите на дерево: если там лиса — она найдена, если нет — цифра покажет, " +
   "сколько лис на той же горизонтали, вертикали и диагоналях. Найдите всех лис за как можно меньше ходов.\n\n" +
   "📅 Игра дня — одна расстановка для всех, в общую таблицу идёт первая попытка.\n" +
-  "🏆 /top — таблица игры дня\n⏰ /remind — напоминания об игре дня\n🧹 /clear — очистить переписку\n\nИграть можно здесь или в браузере: " + SITE;
+  "🏆 /top — таблица игры дня\n⏰ /remind — напоминания об игре дня\n⭐ /donate — поддержать игру\n🧹 /clear — очистить переписку\n\nИграть можно здесь или в браузере: " + SITE;
 
 const NONCE_RE = "[a-f0-9]{32}";
 const NONCE = new RegExp(`^${NONCE_RE}$`);
@@ -231,8 +232,59 @@ async function remindSettings(chat: number, set?: number | null, edit?: number) 
   else await tg("sendMessage", msg);
 }
 
+// ---------- donations in Telegram Stars (no payment provider: the bot takes them itself) ----------
+const TIPS = [50, 100, 250];
+const TIP_MAX = 10000;
+const TIP = /^tip:(\d+)$/;
+const DONATE_TEXT = "⭐ Поддержать «Охоту на лис»\n\nИгра бесплатная и без рекламы. Если она вам нравится, можно поддержать её звёздами Telegram — " +
+  "это добровольно и ничего не меняет в игре: таблица и значки у всех одинаковые.\n\nСколько звёзд?";
+const DONATE_KEYS = { inline_keyboard: [
+  [...TIPS.map((n) => ({ text: `⭐ ${n}`, callback_data: `tip:${n}` })), { text: "✏️ Своя сумма", callback_data: "tip:own" }],
+] };
+const ASK_OWN = `Сколько звёзд хотите подарить игре? Напишите число от 1 до ${TIP_MAX} ответом на это сообщение.`;
+const PAYSUPPORT = "Вопросы по оплате звёздами: если что-то пошло не так или вы хотите вернуть звёзды, напишите одним сообщением\n" +
+  "/paysupport и ваш вопрос\n\nБот передаст его разработчику игры, ответ придёт сюда же. Telegram по таким платежам помочь не может: ими занимается разработчик.";
+const who = (u: { id: number; first_name?: string; last_name?: string; username?: string }) =>
+  [nameOf(u), u.username ? "@" + u.username : null].filter(Boolean).join(" ") + ` (id:${u.id})`;
+const ASKED = /\(id:(\d+)\)/;               // the player's id in a question forwarded to the developer
+const msk = (iso: string) => new Date(Date.parse(iso) + 3 * 3600e3).toISOString();      // "2026-10-16T19:05…" in Moscow time
+const fmtDay = (iso: string) => { const t = msk(iso); return `${t.slice(8, 10)}.${t.slice(5, 7)}.${t.slice(2, 4)} ${t.slice(11, 16)}`; };
+// for the developer only: who, when and how much
+async function donationsReport(): Promise<string> {
+  const { data, error } = await db.from("donations").select("tg_id, tg_user, name, stars, created_at").order("created_at", { ascending: false });
+  if (error) return "Не удалось загрузить: " + error.message;
+  if (!data?.length) return "⭐ Донатов пока нет.";
+  const sum = (r: { stars: number }[]) => r.reduce((a, d) => a + d.stars, 0);
+  const month = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 7);
+  const thisMonth = data.filter((d: { created_at: string }) => msk(d.created_at).slice(0, 7) === month);
+  let out = `⭐ Донаты: всего ${sum(data)} ⭐ (${data.length}), в этом месяце ${sum(thisMonth)} ⭐ (${thisMonth.length})\n\nПоследние:\n`;
+  for (const d of data.slice(0, 30))
+    out += `${fmtDay(d.created_at)} — ${d.stars} ⭐ — ${[d.name, d.tg_user ? "@" + d.tg_user : null].filter(Boolean).join(" ") || "id " + d.tg_id}\n`;
+  return out + "\nВсе записи — таблица donations в Supabase. Звёзды на балансе бота: @BotFather → бот → Balance.";
+}
+const sendTip = (chat: number, n: number) => tg("sendInvoice", {
+  chat_id: chat, title: "Поддержка игры «Охота на лис»",
+  description: `Добровольная поддержка разработки — ${n} ⭐. Спасибо! 🦊`,
+  payload: `tip:${n}`, currency: "XTR", prices: [{ label: "Поддержка игры", amount: n }],
+});
+const askOwn = (chat: number) => tg("sendMessage", {
+  chat_id: chat, text: ASK_OWN, reply_markup: { force_reply: true, input_field_placeholder: "например, 30" },
+});
+// a number of stars typed by the player: a valid one gets an invoice, anything else — the question again
+async function ownTip(chat: number, text: string) {
+  const n = Number(text.trim().replace(/[\s⭐]/g, ""));
+  if (Number.isInteger(n) && n >= 1 && n <= TIP_MAX) await sendTip(chat, n);
+  else await askOwn(chat);
+}
+
 async function botCommand(cmd: string, chat: number, lastId: number) {
-  if (cmd === "remind") {
+  if (cmd === "donate") {
+    await tg("sendMessage", { chat_id: chat, text: DONATE_TEXT, reply_markup: DONATE_KEYS });
+  } else if (cmd === "donations" && chat === OWNER) {
+    await tg("sendMessage", { chat_id: chat, text: await donationsReport() });
+  } else if (cmd === "paysupport") {
+    await tg("sendMessage", { chat_id: chat, text: PAYSUPPORT });
+  } else if (cmd === "remind") {
     await remindSettings(chat);
   } else if (cmd === "top") {
     await tg("sendMessage", { chat_id: chat, text: await dayTop(), reply_markup: MENU });
@@ -261,14 +313,16 @@ Deno.serve(async (req) => {
   // one-time setup from the browser: …/functions/v1/tg?setup=<TG_SECRET>
   if (req.method === "GET") {
     if (!SECRET || url.searchParams.get("setup") !== SECRET) return json({ error: "not found" }, 404);
-    const hook = await tg("setWebhook", { url: `${SB_URL}/functions/v1/tg`, secret_token: SECRET, allowed_updates: ["message", "callback_query"] });
+    const hook = await tg("setWebhook", { url: `${SB_URL}/functions/v1/tg`, secret_token: SECRET, allowed_updates: ["message", "callback_query", "pre_checkout_query"] });
     const menu = await tg("setChatMenuButton", { menu_button: { type: "web_app", text: "Играть", web_app: { url: SITE } } });
     const cmds = await tg("setMyCommands", { commands: [
       { command: "play", description: "Открыть игру" },
       { command: "top", description: "Таблица игры дня" },
       { command: "help", description: "Как играть" },
       { command: "remind", description: "Напоминания об игре дня" },
+      { command: "donate", description: "Поддержать игру звёздами" },
       { command: "clear", description: "Очистить переписку с ботом" },
+      { command: "paysupport", description: "Вопросы по оплате звёздами" },
     ] });
     await tg("setMyDescription", { description: "🦊 Логическая игра «Охота на лис»: найдите лис в лесу по пеленгу.\n\nИгра дня — одна расстановка для всех, общая таблица, серии и значки. Нажмите «Играть»!" });
     await tg("setMyShortDescription", { short_description: "Логическая игра «Охота на лис» 🦊 Игра дня, общая таблица и значки" });
@@ -287,6 +341,14 @@ Deno.serve(async (req) => {
   if (SECRET && req.headers.get("x-telegram-bot-api-secret-token") === SECRET) {
     try {
       const u = await req.json().catch(() => ({}));
+      const pq = u?.pre_checkout_query;
+      if (pq) {                                            // Telegram asks before taking the stars: must answer within 10 s
+        const tip = String(pq.invoice_payload || "").match(TIP);
+        const fine = !!tip && pq.currency === "XTR" && pq.total_amount === Number(tip[1]);
+        await tg("answerPreCheckoutQuery", fine ? { pre_checkout_query_id: pq.id, ok: true }
+          : { pre_checkout_query_id: pq.id, ok: false, error_message: "Этот счёт устарел — нажмите /donate ещё раз" });
+        return json({ ok: true });
+      }
       const cq = u?.callback_query;
       if (cq?.message) {                                   // a button under a bot message
         const ok = String(cq.data || "").match(OK_CB);
@@ -311,6 +373,13 @@ Deno.serve(async (req) => {
           await tg("answerCallbackQuery", { callback_query_id: cq.id, text: saved || !edited?.ok ? undefined : "Не получилось, попробуйте ещё раз" }).catch(() => null);
           return json({ ok: true });
         }
+        const tip = String(cq.data || "").match(/^tip:(\d+|own)$/);
+        if (tip) {
+          await tg("answerCallbackQuery", { callback_query_id: cq.id });
+          if (tip[1] === "own") await askOwn(cq.message.chat.id);
+          else if (TIPS.includes(Number(tip[1]))) await sendTip(cq.message.chat.id, Number(tip[1]));
+          return json({ ok: true });
+        }
         const rh = String(cq.data || "").match(/^rh:(\d{1,2}|off)$/);
         if (rh) {                                          // reminder time / off
           const h = rh[1] === "off" ? null : Number(rh[1]);
@@ -325,6 +394,15 @@ Deno.serve(async (req) => {
         return json({ ok: true });
       }
       const m = u?.message;
+      const paid = m?.successful_payment;
+      if (paid && m.from) {                                // the stars are taken: remember and thank
+        // (upsert by the charge id: Telegram may send the same update twice)
+        const { error } = await db.from("donations").upsert({ charge_id: paid.telegram_payment_charge_id, tg_id: m.from.id, tg_user: m.from.username ?? null, name: nameOf(m.from), stars: paid.total_amount }, { onConflict: "charge_id", ignoreDuplicates: true });
+        if (error) console.error("donation", paid.telegram_payment_charge_id, error.message);
+        await tg("sendMessage", { chat_id: m.chat.id, text: `🦊 Спасибо за поддержку — ${paid.total_amount} ⭐! Это очень помогает игре.`, reply_markup: PLAY });
+        await tg("sendMessage", { chat_id: OWNER, text: `⭐ +${paid.total_amount} от ${who(m.from)}\nВсе донаты: /donations` }).catch(() => null);
+        return json({ ok: true });
+      }
       if (!m?.text || !m.from) return json({ ok: true });
       if (m.chat.type === "private")                       // remember the chat: reminders go to those who wrote to the bot
         try { await db.rpc("tg_seen", { p_chat: m.chat.id, p_user: m.from.username ?? null }); } catch { /* not critical */ }
@@ -336,6 +414,17 @@ Deno.serve(async (req) => {
           text: "Войти в игру «Охота на лис» с этим Telegram?\n\nПодтверждайте, только если вы сами только что нажали «Войти через Telegram» в игре. Если ссылку прислал кто-то другой — не нажимайте.",
           reply_markup: { inline_keyboard: [[{ text: "✅ Да, это я — войти", callback_data: `ok:${start[1]}:${m.date}` }]] },
         });
+      } else if (m.reply_to_message?.from?.is_bot && m.reply_to_message.text === ASK_OWN) {   // the answer to «Своя сумма»
+        await ownTip(m.chat.id, m.text);
+      } else if (m.chat.id === OWNER && m.reply_to_message?.from?.is_bot && ASKED.test(m.reply_to_message.text ?? "")) {   // the developer answers a question
+        const to = Number(m.reply_to_message.text.match(ASKED)[1]);
+        const r = await tg("sendMessage", { chat_id: to, text: "💬 Ответ разработчика игры:\n\n" + m.text });
+        await tg("sendMessage", { chat_id: OWNER, text: r?.ok ? "✅ Ответ отправлен" : "Не отправилось: " + (r?.description ?? "ошибка") });
+      } else if (/^\/paysupport(@\w+)?\s+\S/i.test(m.text)) {               // a question about a payment → to the developer
+        await tg("sendMessage", { chat_id: OWNER, text: `💬 Вопрос по оплате от ${who(m.from)}:\n\n${m.text.replace(/^\/paysupport(@\w+)?\s+/i, "")}\n\n(ответьте на это сообщение — ответ уйдёт игроку)` });
+        await tg("sendMessage", { chat_id: m.chat.id, text: "✅ Вопрос передан разработчику, ответ придёт сюда." });
+      } else if (/^\/donate(@\w+)?\s+\S/i.test(m.text)) {                  // «/donate 300»
+        await ownTip(m.chat.id, m.text.replace(/^\/donate(@\w+)?/i, ""));
       } else {
         await botCommand((m.text.match(/^\/(\w+)/)?.[1] ?? "").toLowerCase(), m.chat.id, m.message_id);
       }
