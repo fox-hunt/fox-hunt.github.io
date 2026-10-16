@@ -199,6 +199,15 @@ t('/paysupport с вопросом уходит разработчику', /ве
 sent.length = 0;
 await hook({ message: { message_id: 29, date: now, text: 'Вернула', chat: priv(OWNER), from: { id: OWNER }, reply_to_message: { from: { is_bot: true }, text: q.text } } });
 t('ответ разработчика приходит игроку', said(/Ответ разработчика[\s\S]*Вернула/, 77));
+const il = await call({ action: 'invoice', stars: 75 });
+t('игра: ссылка на счёт для своей суммы', il.s === 200 && il.d.link && sent.some(([m, b]) => m === 'createInvoiceLink' && b.prices[0].amount === 75 && b.currency === 'XTR'));
+t('игра: сумма 0 или дробная — отказ', (await call({ action: 'invoice', stars: 0 })).s === 400 && (await call({ action: 'invoice', stars: 1.5 })).s === 400);
+sent.length = 0;
+await hook({ message: { message_id: 30, date: now, text: '/start donate', chat: priv(77), from: { id: 77 } } });
+t('ссылка ?start=donate открывает выбор суммы', sent.some(([m, b]) => m === 'sendMessage' && /Поддержать/.test(b.text) && b.reply_markup?.inline_keyboard?.flat().some(k => k.callback_data === 'tip:own')));
+sent.length = 0;
+await hook({ message: { message_id: 31, date: now, text: '/start tip_120', chat: priv(77), from: { id: 77 } } });
+t('ссылка ?start=tip_120 из браузера — счёт на 120 ⭐', sent.find(([m]) => m === 'sendInvoice')?.[1].prices[0].amount === 120);
 // 13. unknown setup secret
 t('настройка без секрета — 404', (await handler(new Request('https://f/tg?setup=nope'))).status === 404);
 console.log(`\n${pass} из ${pass + fail} проверок прошли`);

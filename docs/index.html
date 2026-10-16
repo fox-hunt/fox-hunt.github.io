@@ -277,6 +277,8 @@ h1 .peek .pk{animation:peek 5.5s ease-in-out .8s infinite}
 .wincount{text-align:center;font-family:var(--font-num);font-size:64px;font-weight:800;letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums}
 .wincount small{display:block;font-size:14px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-2);margin-top:6px}
 .field{display:flex;flex-direction:column;gap:6px}
+.tips{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.tips .primary{padding:0}
+.tipown{display:flex;gap:10px}.tipown input{flex:1;min-width:0}
 .field label{font-size:13px;font-weight:600;color:var(--fg-2);padding-left:4px}
 .field input{height:52px;border-radius:var(--r-md);border:1px solid var(--hair);background:var(--tile);color:var(--fg);padding:0 16px;font:inherit;font-size:17px;outline:none}
 .field input:focus{border-color:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 22%,transparent)}
@@ -678,6 +680,18 @@ html.in-tg [data-a="out"],html.in-tg [data-a="tg"],html.in-tg .authbtn[data-a="t
   </div>
 </section>
 
+<section class="sheet glass" id="sheetTip" role="dialog" aria-modal="true" aria-labelledby="tipT" hidden>
+  <div class="grab"></div>
+  <div class="shead"><div><h2 id="tipT">Поддержать игру</h2><p class="sub">Игра бесплатная и без рекламы. Если она вам нравится, можно поддержать её звёздами Telegram. Это добровольно и ничего не меняет в игре.</p></div>
+    <button class="x" data-close aria-label="Закрыть"><svg viewBox="0 0 14 14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M2 2l10 10M12 2 2 12"/></svg></button></div>
+  <div class="body">
+    <div class="tips"><button class="primary" data-tip="50">⭐ 50</button><button class="primary" data-tip="100">⭐ 100</button><button class="primary" data-tip="250">⭐ 250</button></div>
+    <div class="field"><label for="tipOwn">Или своя сумма</label>
+      <div class="tipown"><input id="tipOwn" type="number" inputmode="numeric" min="1" max="10000" placeholder="например, 30"><button class="primary" id="tipOwnGo">Поддержать</button></div></div>
+    <p class="setnote" id="tipNote" hidden>Оплата откроется в Telegram.</p>
+  </div>
+</section>
+
 <section class="sheet glass" id="sheetAccount" role="dialog" aria-modal="true" aria-labelledby="accT" hidden>
   <div class="grab"></div>
   <div class="shead"><div><h2 id="accT">Аккаунт</h2><p class="sub" id="accSub"></p></div>
@@ -710,6 +724,7 @@ html.in-tg [data-a="out"],html.in-tg [data-a="tg"],html.in-tg .authbtn[data-a="t
     <div class="group" id="whereGroup">
       <a class="row" id="playTg" href="https://t.me/FoxHuntGameBot?startapp" target="_blank" rel="noopener"><span class="ri" id="playTgIc"></span><span class="rt"><b>Играть в Telegram</b><span>Игра прямо в Telegram, тот же аккаунт и рейтинг</span></span><span class="ri" aria-hidden="true">›</span></a>
       <button class="row" id="shareGame"><span class="ri">📤</span><span class="rt"><b>Поделиться игрой</b><span>Отправить ссылку друзьям</span></span><span class="ri" aria-hidden="true">›</span></button>
+      <button class="row" id="tipGo"><span class="ri">⭐</span><span class="rt"><b>Поддержать игру</b><span>Звёздами Telegram: добровольно, игра остаётся бесплатной</span></span><span class="ri" aria-hidden="true">›</span></button>
       <button class="row" id="playWeb" hidden><span class="ri">🌐</span><span class="rt"><b>Открыть в браузере</b><span>fox-hunt.github.io: тот же аккаунт, если войти через Telegram</span></span><span class="ri" aria-hidden="true">›</span></button>
     </div>
     <div class="group" id="installGroup" hidden>
@@ -1454,6 +1469,12 @@ const SRV = (() => {
       if (!r.ok || d.status !== 'ok') throw new Error((d.error || 'server') + (d.why ? ':' + d.why : ''));
       keep(d.session); setMe(null); d.profile = await this.loadProfile(); return d;
     },
+    async tipLink(stars){
+      const r = await go(URL + '/functions/v1/tg', { method: 'POST', headers: hdr(), body: JSON.stringify({ action: 'invoice', stars }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.link) throw new Error(d.error || 'server');
+      return d.link;
+    },
     async tgHandoff(initData, nonce){
       const r = await go(URL + '/functions/v1/tg', { method: 'POST', headers: hdr(), body: JSON.stringify({ action: 'handoff', initData, nonce }) });
       return r.ok;
@@ -2174,6 +2195,23 @@ function tgWhere(){
     if (navigator.share){ try { await navigator.share({ title: 'Охота на лис', text, url: link }); } catch {} return; }
     try { await navigator.clipboard.writeText(text + ' ' + link); toast('Ссылка скопирована, отправьте её друзьям'); } catch { toast(link); }
   };
+  // support the game with Telegram Stars: inside Telegram the payment opens over the game,
+  // in a browser — the bot opens in Telegram with the invoice for that sum
+  $('tipGo').onclick = () => { $('tipNote').hidden = inTG; openSheet('sheetTip'); };
+  const tip = async n => {
+    n = Number(n);
+    if (!Number.isInteger(n) || n < 1 || n > 10000) return toast('Звёзд — от 1 до 10 000');
+    if (!inTG || !TGW?.openInvoice) return void open(`https://t.me/FoxHuntGameBot?start=tip_${n}`, '_blank');
+    try {
+      TGW.openInvoice(await SRV.tipLink(n), st => {
+        if (st === 'paid'){ closeSheets(); toast('Спасибо за поддержку! 🦊'); confetti(); }
+        else if (st === 'failed') toast('Оплата не прошла');
+      });
+    } catch (e){ toast(e.message === 'net' ? 'Нет связи с сервером' : 'Не получилось, попробуйте позже'); }
+  };
+  document.querySelectorAll('[data-tip]').forEach(b => b.onclick = () => tip(b.dataset.tip));
+  $('tipOwnGo').onclick = () => tip($('tipOwn').value);
+  $('tipOwn').onkeydown = e => { if (e.key === 'Enter') tip($('tipOwn').value); };
   $('playWeb').onclick = async () => {
     let url = 'https://fox-hunt.github.io/';
     try {

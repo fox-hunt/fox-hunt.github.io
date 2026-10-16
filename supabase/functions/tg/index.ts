@@ -262,11 +262,12 @@ async function donationsReport(): Promise<string> {
     out += `${fmtDay(d.created_at)} — ${d.stars} ⭐ — ${[d.name, d.tg_user ? "@" + d.tg_user : null].filter(Boolean).join(" ") || "id " + d.tg_id}\n`;
   return out + "\nВсе записи — таблица donations в Supabase. Звёзды на балансе бота: @BotFather → бот → Balance.";
 }
-const sendTip = (chat: number, n: number) => tg("sendInvoice", {
-  chat_id: chat, title: "Поддержка игры «Охота на лис»",
+const tipInvoice = (n: number) => ({
+  title: "Поддержка игры «Охота на лис»",
   description: `Добровольная поддержка разработки — ${n} ⭐. Спасибо! 🦊`,
   payload: `tip:${n}`, currency: "XTR", prices: [{ label: "Поддержка игры", amount: n }],
 });
+const sendTip = (chat: number, n: number) => tg("sendInvoice", { chat_id: chat, ...tipInvoice(n) });
 const askOwn = (chat: number) => tg("sendMessage", {
   chat_id: chat, text: ASK_OWN, reply_markup: { force_reply: true, input_field_placeholder: "например, 30" },
 });
@@ -423,6 +424,10 @@ Deno.serve(async (req) => {
       } else if (/^\/paysupport(@\w+)?\s+\S/i.test(m.text)) {               // a question about a payment → to the developer
         await tg("sendMessage", { chat_id: OWNER, text: `💬 Вопрос по оплате от ${who(m.from)}:\n\n${m.text.replace(/^\/paysupport(@\w+)?\s+/i, "")}\n\n(ответьте на это сообщение — ответ уйдёт игроку)` });
         await tg("sendMessage", { chat_id: m.chat.id, text: "✅ Вопрос передан разработчику, ответ придёт сюда." });
+      } else if (/^\/start\s+donate\s*$/i.test(m.text)) {                  // t.me/<бот>?start=donate
+        await botCommand("donate", m.chat.id, m.message_id);
+      } else if (/^\/start\s+tip_\d+\s*$/i.test(m.text)) {                 // t.me/<бот>?start=tip_100 — «Поддержать» in the game in a browser
+        await ownTip(m.chat.id, m.text.match(/tip_(\d+)/)![1]);
       } else if (/^\/donate(@\w+)?\s+\S/i.test(m.text)) {                  // «/donate 300»
         await ownTip(m.chat.id, m.text.replace(/^\/donate(@\w+)?/i, ""));
       } else {
@@ -452,6 +457,12 @@ Deno.serve(async (req) => {
       if (he) return json({ error: "save" }, 500);
       if (!has) return json({ error: "notg" }, 400);
       return (await saveLogin("h:" + body.nonce, u)) ? json({ ok: true }) : json({ error: "save" }, 500);
+    }
+    if (body.action === "invoice") {                      // «Поддержать» in the game: a Stars invoice link (paid in Telegram)
+      const n = Number(body.stars);
+      if (!Number.isInteger(n) || n < 1 || n > TIP_MAX) return json({ error: "bad" }, 400);
+      const r = await tg("createInvoiceLink", tipInvoice(n)).catch(() => null);
+      return r?.ok ? json({ link: r.result }) : json({ error: "tg" }, 502);
     }
     if (body.action === "photo") {
       const uid = (await userOf(req))?.id;
