@@ -8,3 +8,4 @@
 - `index.html` — игра (исходник)
 - `assets/` — иконки
 - `build.sh` — собирает сайт в `docs/` (его показывает GitHub Pages)
+- `tests/` — тесты: `sh tests/run.sh` (функция бота на подставных Telegram и базе + игра в Chrome; нужны Node.js и Google Chrome)

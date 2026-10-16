@@ -9,3 +9,7 @@
 supabase/.temp/
 CLAUDE.local.md
 .env
+
+# тесты: зависимости и временная сборка
+tests/node_modules/
+tests/.build/
